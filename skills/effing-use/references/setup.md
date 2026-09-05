@@ -27,7 +27,10 @@ VS Code `.vscode/mcp.json`:
       "command": "bun",
       "args": ["${workspaceFolder}/src/index.ts"],
       "cwd": "${workspaceFolder}",
-      "env": { "BROWSER_HEADLESS": "true", "OUTPUT_DIR": "${workspaceFolder}/.browser-use" }
+      "env": {
+        "BROWSER_HEADLESS": "true",
+        "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
+      }
     },
     "effing-use (http)": { "type": "http", "url": "http://localhost:3123/mcp" }
   }
@@ -57,16 +60,16 @@ The container listens on 3000 internally; only the host-side port moves.
 
 All optional; defaults shown (see `.env.example`):
 
-| Var | Default | Notes |
-| --- | ------- | ----- |
-| `PORT` | `3000` | `src/http.ts` listen port (container-internal) |
-| `ECU_PORT` | `3000` | compose host-side port override |
-| `BROWSER_HEADLESS` | `true` | Docker supports headless Chromium only |
-| `BROWSER_VIEWPORT_W/H` | `1280/800` | |
-| `BROWSER_TIMEOUT_MS` | `15000` | per-action Playwright timeout |
-| `OUTPUT_DIR` | `.browser-use` | all file outputs land here |
-| `OUTPUT_MAX_CHARS` | `4000` | inline cap; full text goes to the file |
-| `ALLOW_EVAL` | `false` | no raw JS eval path unless explicitly enabled |
+| Var                    | Default        | Notes                                          |
+| ---------------------- | -------------- | ---------------------------------------------- |
+| `PORT`                 | `3000`         | `src/http.ts` listen port (container-internal) |
+| `ECU_PORT`             | `3000`         | compose host-side port override                |
+| `BROWSER_HEADLESS`     | `true`         | Docker supports headless Chromium only         |
+| `BROWSER_VIEWPORT_W/H` | `1280/800`     |                                                |
+| `BROWSER_TIMEOUT_MS`   | `15000`        | per-action Playwright timeout                  |
+| `OUTPUT_DIR`           | `.browser-use` | all file outputs land here                     |
+| `OUTPUT_MAX_CHARS`     | `4000`         | inline cap; full text goes to the file         |
+| `ALLOW_EVAL`           | `false`        | no raw JS eval path unless explicitly enabled  |
 
 ## Gitignore contract
 
