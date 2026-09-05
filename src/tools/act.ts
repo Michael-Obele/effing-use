@@ -71,29 +71,60 @@ export const actTool = defineTool(
       if (action === "batch") {
         if (!steps || steps.length === 0)
           return tool.text(
-            JSON.stringify({ ok: false, code: "E_BAD_INPUT", message: "Missing steps[].", hint: "Pass steps[] with up to 20 {action,target,value} entries." }),
+            JSON.stringify({
+              ok: false,
+              code: "E_BAD_INPUT",
+              message: "Missing steps[].",
+              hint: "Pass steps[] with up to 20 {action,target,value} entries.",
+            }),
           );
         const result = await doBatch(
           page,
           config,
-          steps as Array<{ action: ActAction; target?: string; value?: string }>,
+          steps as Array<{
+            action: ActAction;
+            target?: string;
+            value?: string;
+          }>,
           opts,
         );
         const url = page.url();
         const title = await page.title().catch(() => "");
-        return tool.text(JSON.stringify({ ok: true, action, url, title, ...result }));
+        return tool.text(
+          JSON.stringify({ ok: true, action, url, title, ...result }),
+        );
       }
       if (action === "goal") {
         const result = await doGoal(page, config, value ?? target ?? "", opts);
         return tool.text(JSON.stringify({ ok: true, action, ...result }));
       }
-      const result = await doAct(page, config, action as ActAction, target, value, opts);
+      const result = await doAct(
+        page,
+        config,
+        action as ActAction,
+        target,
+        value,
+        opts,
+      );
       return tool.text(JSON.stringify({ ok: true, action, ...result }));
     } catch (e) {
       if (e instanceof EngineError)
-        return tool.text(JSON.stringify({ ok: false, code: e.code, message: e.message, hint: e.hint, ...(e.data ?? {}) }));
+        return tool.text(
+          JSON.stringify({
+            ok: false,
+            code: e.code,
+            message: e.message,
+            hint: e.hint,
+            ...(e.data ?? {}),
+          }),
+        );
       return tool.text(
-        JSON.stringify({ ok: false, code: "E_BAD_INPUT", message: e instanceof Error ? e.message : String(e), hint: "Retry with fresh snapshot refs." }),
+        JSON.stringify({
+          ok: false,
+          code: "E_BAD_INPUT",
+          message: e instanceof Error ? e.message : String(e),
+          hint: "Retry with fresh snapshot refs.",
+        }),
       );
     }
   },

@@ -47,9 +47,21 @@ export const observeTool = defineTool(
       return tool.text(JSON.stringify({ ok: true, kind, ...result }));
     } catch (e) {
       if (e instanceof EngineError)
-        return tool.text(JSON.stringify({ ok: false, code: e.code, message: e.message, hint: e.hint }));
+        return tool.text(
+          JSON.stringify({
+            ok: false,
+            code: e.code,
+            message: e.message,
+            hint: e.hint,
+          }),
+        );
       return tool.text(
-        JSON.stringify({ ok: false, code: "E_BAD_INPUT", message: e instanceof Error ? e.message : String(e), hint: "Retry the observe call." }),
+        JSON.stringify({
+          ok: false,
+          code: "E_BAD_INPUT",
+          message: e instanceof Error ? e.message : String(e),
+          hint: "Retry the observe call.",
+        }),
       );
     }
   },

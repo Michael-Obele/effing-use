@@ -1,33 +1,33 @@
 {
-	"name": "efficient-computer-use",
-	"version": "0.1.0",
-	"description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Valibot",
-	"type": "module",
-	"bin": {
-		"efficient-computer-use": "./src/index.ts"
-	},
-	"main": "src/index.ts",
-	"scripts": {
-		"start": "bun src/index.ts",
-		"dev": "bun --watch src/index.ts",
-		"check": "bunx tsc --noEmit",
-		"test": "bun test"
-	},
-	"keywords": [
-		"tmcp",
-		"mcp",
-		"playwright",
-		"browser-automation"
-	],
-	"dependencies": {
-		"tmcp": "latest",
-		"@tmcp/adapter-valibot": "latest",
-		"@tmcp/transport-stdio": "latest",
-		"valibot": "latest",
-		"playwright": "latest"
-	},
-	"devDependencies": {
-		"@types/bun": "latest",
-		"typescript": "latest"
-	}
+  "name": "efficient-computer-use",
+  "version": "0.1.0",
+  "description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Valibot",
+  "type": "module",
+  "bin": {
+    "efficient-computer-use": "./src/index.ts"
+  },
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "check": "bunx tsc --noEmit",
+    "test": "bun test"
+  },
+  "keywords": [
+    "tmcp",
+    "mcp",
+    "playwright",
+    "browser-automation"
+  ],
+  "dependencies": {
+    "tmcp": "latest",
+    "@tmcp/adapter-valibot": "latest",
+    "@tmcp/transport-stdio": "latest",
+    "valibot": "latest",
+    "playwright": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
 }

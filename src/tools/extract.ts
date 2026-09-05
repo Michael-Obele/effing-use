@@ -42,9 +42,20 @@ export const extractTool = defineTool(
       if (kind === "query") {
         if (!selector)
           return tool.text(
-            JSON.stringify({ ok: false, code: "E_BAD_INPUT", message: "Missing selector.", hint: "Pass a CSS selector in selector and mode text|href|json." }),
+            JSON.stringify({
+              ok: false,
+              code: "E_BAD_INPUT",
+              message: "Missing selector.",
+              hint: "Pass a CSS selector in selector and mode text|href|json.",
+            }),
           );
-        const result = await doQuery(page, config, selector, mode ?? "text", limit ?? 50);
+        const result = await doQuery(
+          page,
+          config,
+          selector,
+          mode ?? "text",
+          limit ?? 50,
+        );
         return tool.text(JSON.stringify({ ok: true, kind, ...result }));
       }
       const result = await doExtract(page, config, kind, selector, limit, {
@@ -54,9 +65,21 @@ export const extractTool = defineTool(
       return tool.text(JSON.stringify({ ok: true, kind, ...result }));
     } catch (e) {
       if (e instanceof EngineError)
-        return tool.text(JSON.stringify({ ok: false, code: e.code, message: e.message, hint: e.hint }));
+        return tool.text(
+          JSON.stringify({
+            ok: false,
+            code: e.code,
+            message: e.message,
+            hint: e.hint,
+          }),
+        );
       return tool.text(
-        JSON.stringify({ ok: false, code: "E_BAD_INPUT", message: e instanceof Error ? e.message : String(e), hint: "Retry the extract call." }),
+        JSON.stringify({
+          ok: false,
+          code: "E_BAD_INPUT",
+          message: e instanceof Error ? e.message : String(e),
+          hint: "Retry the extract call.",
+        }),
       );
     }
   },

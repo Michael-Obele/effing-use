@@ -36,7 +36,9 @@ describe("doBatch()", () => {
   test("rejects >20 steps without touching the page", async () => {
     const fakePage = {} as never;
     const fakeConfig = {} as never;
-    const steps = Array.from({ length: 21 }, () => ({ action: "wait" as const }));
+    const steps = Array.from({ length: 21 }, () => ({
+      action: "wait" as const,
+    }));
     let err: unknown;
     try {
       await doBatch(fakePage, fakeConfig, steps);
@@ -61,6 +63,10 @@ describe("doGoal()", () => {
     expect(err).toBeInstanceOf(EngineError);
     const ee = err as EngineError;
     expect(ee.code).toBe("E_GOAL_UNCLEAR");
-    expect(Array.isArray((ee.data as { suggestedSteps?: unknown[] })?.suggestedSteps)).toBe(true);
+    expect(
+      Array.isArray(
+        (ee.data as { suggestedSteps?: unknown[] })?.suggestedSteps,
+      ),
+    ).toBe(true);
   });
 });
