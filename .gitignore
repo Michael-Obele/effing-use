@@ -1,0 +1,13 @@
+node_modules/
+.browser-use/
+*.png
+*.pdf
+*.yml
+.fallow/
+dist/
+build/
+
+# plan folder (local planning docs, not committed)
+litepilot/
+**/plan/
+litepilot/docs/plan/
