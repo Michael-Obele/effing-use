@@ -13,7 +13,7 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === "/healthz") {
-      return Response.json({ ok: true, name: "efficient-computer-use" });
+      return Response.json({ ok: true, name: "effing-use" });
     }
     const response = await transport.respond(req);
     if (response === null) {
@@ -24,4 +24,4 @@ Bun.serve({
 });
 
 // eslint-disable-next-line no-console
-console.log(`efficient-computer-use listening on :${port} (MCP at /mcp)`);
+console.log(`effing-use listening on :${port} (MCP at /mcp)`);

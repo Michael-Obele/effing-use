@@ -1,4 +1,4 @@
-# efficient-computer-use
+# effing-use
 
 Token-efficient browser control: 3 tools (`browser_act`, `browser_observe`, `browser_extract`) built with `tmcp` + Bun + Valibot + Playwright. Wraps Chromium with file-path-first outputs, capped snapshots, and high-level `goal`/`batch` actions.
 
@@ -23,7 +23,7 @@ curl http://localhost:3000/healthz
 ```
 
 Then point any local VS Code instance at `http://localhost:3000/mcp`
-(see `.vscode/mcp.json` → `efficient-computer-use (http)`).
+(see `.vscode/mcp.json` → `effing-use (http)`).
 Plain HTTP on loopback is intentional — add TLS at the edge
 (reverse proxy / Cloudflare Tunnel / Tailscale) for remote use.
 
@@ -53,7 +53,7 @@ Plain HTTP on loopback is intentional — add TLS at the edge
 3. `browser_observe` kind=screenshot to verify
 4. `browser_extract` kind=text|table|query to scrape
 
-See `skills/SKILL.md` for the agent skill. Env defaults in `.env.example`.
+See `skills/effing-use/SKILL.md` for the installable agent skill (skills.sh-ready). Env defaults in `.env.example`.
 
 ## Verify
 

@@ -1,10 +1,10 @@
 {
-  "name": "efficient-computer-use",
+  "name": "effing-use",
   "version": "0.1.0",
   "description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Valibot",
   "type": "module",
   "bin": {
-    "efficient-computer-use": "./src/index.ts"
+    "effing-use": "./src/index.ts"
   },
   "main": "src/index.ts",
   "scripts": {

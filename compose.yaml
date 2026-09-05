@@ -1,9 +1,9 @@
-name: efficient-computer-use
+name: effing-use
 
 services:
   computer-use:
     build: .
-    image: efficient-computer-use:local
+    image: effing-use:local
     # Playwright docs: --init avoids PID=1 zombie issues, --ipc=host keeps
     # Chromium from crashing on low /dev/shm. Streamable HTTP transport:
     # published port, no stdin/TTY needed.
