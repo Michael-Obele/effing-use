@@ -1,0 +1,24 @@
+name: efficient-computer-use
+
+services:
+  computer-use:
+    build: .
+    image: efficient-computer-use:local
+    # Playwright docs: --init avoids PID=1 zombie issues, --ipc=host keeps
+    # Chromium from crashing on low /dev/shm. STDIO transport: stdin piped
+    # from the MCP client, no TTY, no ports.
+    init: true
+    ipc: host
+    stdin_open: true
+    tty: false
+    environment:
+      BROWSER_HEADLESS: "true"
+      BROWSER_VIEWPORT_W: "1280"
+      BROWSER_VIEWPORT_H: "800"
+      BROWSER_TIMEOUT_MS: "15000"
+      OUTPUT_DIR: /app/.browser-use
+      OUTPUT_MAX_CHARS: "4000"
+      ALLOW_EVAL: "false"
+    volumes:
+      # Persist snapshots / screenshots / PDFs on the host for inspection
+      - ./.browser-use:/app/.browser-use

@@ -1,0 +1,14 @@
+node_modules
+.browser-use
+.git
+.gitignore
+litepilot
+.fallow
+dist
+build
+*.png
+*.pdf
+*.yml
+.env
+Dockerfile
+.dockerignore

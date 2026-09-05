@@ -9,6 +9,25 @@
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
       }
+    },
+    "efficient-computer-use (docker)": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--init",
+        "--ipc=host",
+        "-e",
+        "BROWSER_HEADLESS=true",
+        "-e",
+        "OUTPUT_DIR=/app/.browser-use",
+        "-v",
+        "${workspaceFolder}/.browser-use:/app/.browser-use",
+        "efficient-computer-use:local"
+      ],
+      "cwd": "${workspaceFolder}"
     }
   }
 }
