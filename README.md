@@ -1,33 +1,23 @@
-# effing-use
+# effing-use — stop paying 19.5 KB every session for browser control
 
-Token-efficient browser control: 3 tools (`browser_act`, `browser_observe`, `browser_extract`) built with `tmcp` + Bun + Valibot + Playwright. Wraps Chromium with file-path-first outputs, capped snapshots, and high-level `goal`/`batch` actions.
+Full Chromium automation in **3 tools, 3.9 KB**. Same pages, same clicks, same scrapes — without the 24-tool handshake eating your context window before you load a page.
 
-- `tools/list` is ~3.9KB (3 tools) vs ~13.7KB for 21-tool Playwright MCP
-- Snapshots capped at `OUTPUT_MAX_CHARS` (default 4000); full content saved under `.browser-use/`
-- Screenshots/PDFs/traces returned as file paths, never inline base64
+**Measured, not marketed:** `tools/list` is **3,913 bytes** here vs **19,517 bytes** for `@playwright/mcp@latest` (~5x smaller, ~15.6 KB saved every session). Local ops stay in milliseconds — snapshot ~15 ms, extract ~50 ms, batch ~65 ms, screenshot ~60–190 ms. Page loads still cost seconds (network, not us). Full numbers in [`docs/COMPARISON.md`](docs/COMPARISON.md).
 
-## Quick start
+## Run it in 60 seconds (recommended path)
+
+**Step 1/3 — Start the server.** One server, every local editor:
 
 ```bash
 bun install
 bunx playwright install chromium --only-shell
-bun src/index.ts          # STDIO (single VS Code instance)
-bun src/http.ts           # Streamable HTTP on :3000 (/mcp) — shared across instances
-```
-
-## Docker (shared across VS Code instances)
-
-```bash
 docker compose up --build -d
 curl http://localhost:3000/healthz
 ```
 
-Then point any local VS Code instance at `http://localhost:3000/mcp`
-(see `.vscode/mcp.json` → `effing-use (http)`).
-Plain HTTP on loopback is intentional — add TLS at the edge
-(reverse proxy / Cloudflare Tunnel / Tailscale) for remote use.
+Point any VS Code instance at `http://localhost:3000/mcp` (see `.vscode/mcp.json` → `effing-use (http)`). Plain HTTP on loopback is intentional — add TLS at the edge for remote use.
 
-## Client config (STDIO, no auth)
+**Step 2/3 — Connect.** STDIO for one editor, HTTP for all of them:
 
 ```json
 {
@@ -40,24 +30,66 @@ Plain HTTP on loopback is intentional — add TLS at the edge
 }
 ```
 
+Or HTTP: `http://localhost:3000/mcp`.
+
+**Step 3/3 — Drive.** Search Wikipedia in one call instead of two round-trips:
+
+```jsonc
+// browser_act batch: fill + press in 65 ms measured
+{
+  "action": "batch",
+  "steps": [
+    { "action": "fill", "target": "input[name=search]", "value": "Playwright" },
+    { "action": "press", "target": "input[name=search]", "value": "Enter" },
+  ],
+}
+```
+
+No Docker? `bun src/index.ts` (STDIO) or `bun src/http.ts` (`:3000` `/mcp`) works directly.
+
+## Why agents prefer 3 tools
+
+- 🪶 **Tiny handshake, full surface** — `browser_act` (27 actions), `browser_observe` (8 kinds), `browser_extract` (7 kinds). No schema bloat, no guessing which of 24 tools to call.
+- 🧠 **Context-safe by default** — snapshots capped at `OUTPUT_MAX_CHARS` (default 4000); full YAML/text saved under `.browser-use/`, never dumped inline. HN snapshot: 4,034-char preview, full file on disk.
+- 🖼️ **File paths, not base64** — screenshots, PDFs, traces return paths like `.browser-use/shot-*.png`. Read the file only when needed.
+- ⚡ **One call, not five** — `batch` runs fill+press flows in one turn (max 20 steps, stops on first error). `goal` plans or returns `E_GOAL_UNCLEAR` + `suggestedSteps` instead of hallucinating.
+- 🐳 **Shared, not spawned** — one Docker server serves every local VS Code instance. No per-client `npx` spawn.
+
+## The loop (agents: follow this order)
+
+1. `browser_observe` kind=`snapshot` → get `[eN]` refs (never guess refs, re-snapshot after navigation)
+2. `browser_act` to interact — prefer `batch` with `steps[]`
+3. `browser_observe` kind=`screenshot` → verify visually (you get a path)
+4. `browser_extract` kind=`text`|`table`|`query` → scrape structured data
+
 ## Tools
 
-- `browser_act` — open/goto, click, fill, type, press, select, check, hover, drag, upload, scroll, back/forward/reload, wait, dialogs, tabs, resize, `goal`, `batch` (steps[])
-- `browser_observe` — snapshot (e-refs), screenshot (path), url, title, console, network, tabs, focused
-- `browser_extract` — text, html, table (JSON rows), query (text|href|json), pdf, trace_start/stop
+- `browser_act` — open/goto, click, dblclick, fill, type, press, select, check/uncheck, hover, drag, upload, scroll, back/forward/reload, wait, dialog_accept/dismiss, tabs (new/select/close), resize, close, `goal`, `batch`
+- `browser_observe` — snapshot (e-refs), screenshot (path), url, title, console (last N), network (method/url/status ring), tabs, focused
+- `browser_extract` — text, html, table (≤100 rows JSON), query (text|href|json), pdf, trace_start/stop
 
-## Workflow
+Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIMEOUT | E_NO_PAGE | E_BAD_INPUT | E_GOAL_UNCLEAR` — never a stack trace.
 
-1. `browser_observe` kind=snapshot → get `[eN]` refs
-2. `browser_act` to interact (prefer `batch` for fill+press flows)
-3. `browser_observe` kind=screenshot to verify
-4. `browser_extract` kind=text|table|query to scrape
+## effing-use vs Playwright MCP
 
-See `skills/effing-use/SKILL.md` for the installable agent skill (skills.sh-ready). Env defaults in `.env.example`.
+|                  | effing-use                      | Playwright MCP                                             |
+| ---------------- | ------------------------------- | ---------------------------------------------------------- |
+| `tools/list`     | **3,913 bytes / 3 tools**       | **19,517 bytes / 24 tools**                                |
+| Snapshot         | capped 4 KB preview + full file | full accessibility tree                                    |
+| Screenshots/PDFs | file paths                      | inline or output dir                                       |
+| Browsers         | Chromium (headless in Docker)   | Chromium, Firefox, WebKit, Edge + vision/pdf/devtools caps |
+
+Need Firefox/WebKit, device emulation, or persistent profiles? Use Playwright MCP. Need context budget for Chromium work? Stay here. Full breakdown in [`docs/COMPARISON.md`](docs/COMPARISON.md).
+
+## Config
+
+Env defaults in [`.env.example`](.env.example): `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR` (`.browser-use/`, gitignored), `OUTPUT_MAX_CHARS`, `ALLOW_EVAL`.
+
+Agent skill: `skills/effing-use/SKILL.md` (skills.sh-ready).
 
 ## Verify
 
 ```bash
 bunx tsc --noEmit   # 0 errors
-bun test            # unit green
+bun test            # 6 pass
 ```
