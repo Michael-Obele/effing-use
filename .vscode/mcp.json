@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "efficient-computer-use": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["${workspaceFolder}/src/index.ts"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "BROWSER_HEADLESS": "true",
+        "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
+      }
+    }
+  }
+}
