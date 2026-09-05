@@ -2,14 +2,10 @@
 # We add Bun and our MCP server on top. Headless Chromium only in Docker.
 FROM mcr.microsoft.com/playwright:v1.63.0-noble
 
-# Install Bun (playwright image is Ubuntu noble; curl/unzip needed for installer)
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl unzip \
-  && rm -rf /var/lib/apt/lists/* \
-  && curl -fsSL https://bun.sh/install | bash
-
-ENV BUN_INSTALL="/root/.bun"
-ENV PATH="/root/.bun/bin:${PATH}"
+# Bun via the official image (pinned for reproducibility; avoids installer
+# download flakiness — a broken curl|bash pipe can silently "succeed")
+COPY --from=oven/bun:1.4.0 /usr/local/bin/bun /usr/local/bin/bun
+RUN bun --version
 
 WORKDIR /app
 

@@ -12,26 +12,7 @@
     },
     "efficient-computer-use (http)": {
       "type": "http",
-      "url": "http://localhost:3000/mcp"
+      "url": "http://localhost:3123/mcp"
     }
-    // "efficient-computer-use (docker)": {
-    //   "type": "stdio",
-    //   "command": "docker",
-    //   "args": [
-    //     "run",
-    //     "--rm",
-    //     "-i",
-    //     "--init",
-    //     "--ipc=host",
-    //     "-e",
-    //     "BROWSER_HEADLESS=true",
-    //     "-e",
-    //     "OUTPUT_DIR=/app/.browser-use",
-    //     "-v",
-    //     "${workspaceFolder}/.browser-use:/app/.browser-use",
-    //     "efficient-computer-use:local"
-    //   ],
-    //   "cwd": "${workspaceFolder}"
-    // }
   }
 }

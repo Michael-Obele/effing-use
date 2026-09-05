@@ -9,6 +9,9 @@ services:
     # published port, no stdin/TTY needed.
     init: true
     ipc: host
+    # Restart across daemon restarts / host reboots (compose must have been
+    # started at least once with `up -d`; Docker then keeps it alive)
+    restart: unless-stopped
     ports:
       # Host port is configurable: ECU_PORT=3123 docker compose up
       # (container always listens on 3000 internally, so only the
@@ -27,7 +30,13 @@ services:
       # Persist snapshots / screenshots / PDFs on the host for inspection
       - ./.browser-use:/app/.browser-use
     healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)process.exit(1)})" ]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
