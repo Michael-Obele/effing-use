@@ -10,7 +10,10 @@ services:
     init: true
     ipc: host
     ports:
-      - "3000:3000"
+      # Host port is configurable: ECU_PORT=3123 docker compose up
+      # (container always listens on 3000 internally, so only the
+      # left-hand side changes — healthcheck and app config stay as-is)
+      - "${ECU_PORT:-3000}:3000"
     environment:
       PORT: "3000"
       BROWSER_HEADLESS: "true"
