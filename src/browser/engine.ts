@@ -676,20 +676,22 @@ export async function doQuery(
 ): Promise<Record<string, unknown>> {
   const items = await page
     .locator(selector)
-    .evaluateAll((els: Element[], m: string) =>
-      els.map((el) => {
-        if (m === "href")
-          return (
-            (el as HTMLAnchorElement).href ?? el.getAttribute("href") ?? ""
-          );
-        if (m === "json")
-          return {
-            tag: el.tagName.toLowerCase(),
-            text: (el.textContent ?? "").trim().slice(0, 200),
-            html: el.outerHTML.slice(0, 500),
-          };
-        return (el.textContent ?? "").trim().slice(0, 500);
-      }),
+    .evaluateAll(
+      (els: Element[], m: string) =>
+        els.map((el) => {
+          if (m === "href")
+            return (
+              (el as HTMLAnchorElement).href ?? el.getAttribute("href") ?? ""
+            );
+          if (m === "json")
+            return {
+              tag: el.tagName.toLowerCase(),
+              text: (el.textContent ?? "").trim().slice(0, 200),
+              html: el.outerHTML.slice(0, 500),
+            };
+          return (el.textContent ?? "").trim().slice(0, 500);
+        }),
+      mode,
     )
     .catch(() => [] as unknown[]);
   const sliced = (items as unknown[]).slice(0, limit);
