@@ -1,28 +1,33 @@
 {
-	"name": "litepilot",
-	"version": "1.0.0",
-	"description": "A TMCP (lightweight MCP) server",
+	"name": "efficient-computer-use",
+	"version": "0.1.0",
+	"description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Valibot",
 	"type": "module",
-	"main": "src/index.js",
+	"bin": {
+		"efficient-computer-use": "./src/index.ts"
+	},
+	"main": "src/index.ts",
 	"scripts": {
-		"start": "bun run src/index.js",
-		"dev": "bun run --watch src/index.js}"
+		"start": "bun src/index.ts",
+		"dev": "bun --watch src/index.ts",
+		"check": "bunx tsc --noEmit",
+		"test": "bun test"
 	},
 	"keywords": [
 		"tmcp",
 		"mcp",
-		"server"
+		"playwright",
+		"browser-automation"
 	],
 	"dependencies": {
-		"@tmcp/adapter-valibot": "^0.1.6",
-		"@tmcp/transport-http": "^0.9.0",
-		"@tmcp/transport-stdio": "^0.5.0",
-		"playwright": "^1.63.0",
-		"srvx": "^1.0.3",
-		"tmcp": "^1.20.0",
-		"valibot": "^1.4.2"
+		"tmcp": "latest",
+		"@tmcp/adapter-valibot": "latest",
+		"@tmcp/transport-stdio": "latest",
+		"valibot": "latest",
+		"playwright": "latest"
 	},
 	"devDependencies": {
-		"@types/node": "^24.0.15"
+		"@types/bun": "latest",
+		"typescript": "latest"
 	}
 }

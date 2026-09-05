@@ -1,55 +1,50 @@
-# litepilot
+# efficient-computer-use
 
-A TMCP (lightweight MCP) server built with:
+Token-efficient browser control: 3 tools (`browser_act`, `browser_observe`, `browser_extract`) built with `tmcp` + Bun + Valibot + Playwright. Wraps Chromium with file-path-first outputs, capped snapshots, and high-level `goal`/`batch` actions.
 
-- **Schema Adapter**: @tmcp/adapter-valibot
-- **Transports**: @tmcp/transport-stdio, @tmcp/transport-http
-- **Example**: Included at `src/index.js`
+- `tools/list` is ~3.9KB (3 tools) vs ~13.7KB for 21-tool Playwright MCP
+- Snapshots capped at `OUTPUT_MAX_CHARS` (default 4000); full content saved under `.browser-use/`
+- Screenshots/PDFs/traces returned as file paths, never inline base64
 
-## Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Start the server
-pnpm run start
-
-# Start with file watching
-pnpm run dev
-```
-
-## Usage
-
-This server provides the following capabilities:
-
-### Tools
-
-- `hello` - A simple greeting tool
-
-### Example Server
-
-Run the example server:
+## Quick start
 
 ```bash
-node src/index.js
+bun install
+bunx playwright install chromium --only-shell
+bun src/index.ts
 ```
 
-The example demonstrates:
-- Schema validation with @tmcp/adapter-valibot
-- STDIO transport for MCP communication
+## Client config (STDIO, no auth)
 
+```json
+{
+  "mcpServers": {
+    "computer-use": {
+      "command": "bun",
+      "args": ["/path/to/litepilot/src/index.ts"]
+    }
+  }
+}
+```
 
+## Tools
 
-## Architecture
+- `browser_act` — open/goto, click, fill, type, press, select, check, hover, drag, upload, scroll, back/forward/reload, wait, dialogs, tabs, resize, `goal`, `batch` (steps[])
+- `browser_observe` — snapshot (e-refs), screenshot (path), url, title, console, network, tabs, focused
+- `browser_extract` — text, html, table (JSON rows), query (text|href|json), pdf, trace_start/stop
 
-This server uses the TMCP (lightweight MCP) architecture:
+## Workflow
 
-- **McpServer**: Core server implementation
-- **Schema Adapter**: Validates input using @tmcp/adapter-valibot
-- **Transports**: Communication layers (@tmcp/transport-stdio, @tmcp/transport-http)
+1. `browser_observe` kind=snapshot → get `[eN]` refs
+2. `browser_act` to interact (prefer `batch` for fill+press flows)
+3. `browser_observe` kind=screenshot to verify
+4. `browser_extract` kind=text|table|query to scrape
 
-## Learn More
+See `skills/SKILL.md` for the agent skill. Env defaults in `.env.example`.
 
-- [TMCP Documentation](https://github.com/paoloricciuti/tmcp)
-- [Model Context Protocol](https://modelcontextprotocol.io/)
+## Verify
+
+```bash
+bunx tsc --noEmit   # 0 errors
+bun test            # unit green
+```
