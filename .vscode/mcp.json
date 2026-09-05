@@ -1,6 +1,6 @@
 {
   "servers": {
-    "efficient-computer-use": {
+    "effing-use (stdio)": {
       "type": "stdio",
       "command": "bun",
       "args": ["${workspaceFolder}/src/index.ts"],
@@ -10,7 +10,7 @@
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
       }
     },
-    "efficient-computer-use (http)": {
+    "effing-use (http)": {
       "type": "http",
       "url": "http://localhost:3123/mcp"
     }
