@@ -5,18 +5,16 @@
     "": {
       "name": "litepilot",
       "dependencies": {
-        "@tmcp/adapter-valibot": "^0.1.6",
+        "@tmcp/adapter-valibot": "latest",
         "@tmcp/transport-http": "^0.9.0",
-        "@tmcp/transport-stdio": "^0.5.0",
-        "playwright": "^1.63.0",
-        "srvx": "^1.0.3",
-        "tmcp": "^1.20.0",
-        "valibot": "^1.4.2",
+        "@tmcp/transport-stdio": "latest",
+        "playwright": "latest",
+        "tmcp": "latest",
+        "valibot": "latest",
       },
       "devDependencies": {
-        "@types/bun": "^1.4.1",
-        "@types/node": "^24.0.15",
-        "typescript": "^7.0.2",
+        "@types/bun": "latest",
+        "typescript": "latest",
       },
     },
   },
@@ -88,8 +86,6 @@
     "playwright-core": ["playwright-core@1.63.0", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg=="],
 
     "sqids": ["sqids@0.3.0", "", {}, "sha512-lOQK1ucVg+W6n3FhRwwSeUijxe93b51Bfz5PMRMihVf1iVkl82ePQG7V5vwrhzB11v0NtsR25PSZRGiSomJaJw=="],
-
-    "srvx": ["srvx@1.0.3", "", { "bin": { "srvx": "./bin/srvx.mjs" } }, "sha512-aOuk+yNJA61yA6eJJvQJxpJLIxz090hKMqDGzd35tGsvwaodi1RPuYSFUp5EINaJp7snjVwLkO2RXVMPZBYnnA=="],
 
     "tmcp": ["tmcp@1.20.0", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "json-rpc-2.0": "^1.7.1", "sqids": "^0.3.0", "uri-template-matcher": "^1.1.1", "valibot": "^1.1.0" } }, "sha512-dcDximKQBGqLP/aEAVA26HcWRHhKipstg1w0fbDDJ0HcFZ6lolLU1YYmStYEn/73f534i7WrDNcjRfRYdV9CoA=="],
 

@@ -11,8 +11,21 @@ Token-efficient browser control: 3 tools (`browser_act`, `browser_observe`, `bro
 ```bash
 bun install
 bunx playwright install chromium --only-shell
-bun src/index.ts
+bun src/index.ts          # STDIO (single VS Code instance)
+bun src/http.ts           # Streamable HTTP on :3000 (/mcp) — shared across instances
 ```
+
+## Docker (shared across VS Code instances)
+
+```bash
+docker compose up --build -d
+curl http://localhost:3000/healthz
+```
+
+Then point any local VS Code instance at `http://localhost:3000/mcp`
+(see `.vscode/mcp.json` → `efficient-computer-use (http)`).
+Plain HTTP on loopback is intentional — add TLS at the edge
+(reverse proxy / Cloudflare Tunnel / Tailscale) for remote use.
 
 ## Client config (STDIO, no auth)
 

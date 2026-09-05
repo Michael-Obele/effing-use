@@ -24,7 +24,12 @@ COPY skills ./skills
 # Server defaults inside the container (override via compose/env at runtime)
 ENV BROWSER_HEADLESS="true"
 ENV OUTPUT_DIR="/app/.browser-use"
+ENV PORT="3000"
 
 RUN mkdir -p /app/.browser-use
 
-ENTRYPOINT ["bun", "src/index.ts"]
+EXPOSE 3000
+
+# Streamable HTTP transport (MCP at /mcp) so any local VS Code instance
+# can reach the server over http://localhost:3000/mcp
+ENTRYPOINT ["bun", "src/http.ts"]

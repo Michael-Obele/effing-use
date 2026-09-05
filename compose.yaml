@@ -5,13 +5,14 @@ services:
     build: .
     image: efficient-computer-use:local
     # Playwright docs: --init avoids PID=1 zombie issues, --ipc=host keeps
-    # Chromium from crashing on low /dev/shm. STDIO transport: stdin piped
-    # from the MCP client, no TTY, no ports.
+    # Chromium from crashing on low /dev/shm. Streamable HTTP transport:
+    # published port, no stdin/TTY needed.
     init: true
     ipc: host
-    stdin_open: true
-    tty: false
+    ports:
+      - "3000:3000"
     environment:
+      PORT: "3000"
       BROWSER_HEADLESS: "true"
       BROWSER_VIEWPORT_W: "1280"
       BROWSER_VIEWPORT_H: "800"
@@ -22,3 +23,9 @@ services:
     volumes:
       # Persist snapshots / screenshots / PDFs on the host for inspection
       - ./.browser-use:/app/.browser-use
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)process.exit(1)})" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
