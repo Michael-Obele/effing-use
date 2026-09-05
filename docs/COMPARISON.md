@@ -118,17 +118,7 @@ Choose **Playwright MCP** when: you need Firefox/WebKit/Edge channels, device em
 - `goal` is a deterministic planner, not magic: unclear goals return `E_GOAL_UNCLEAR` + `suggestedSteps`.
 - Playwright MCP local-op speed not measured here — both servers pay the same network cost on page loads; the measured gap is handshake weight and output strategy, not navigation speed.
 
-## 8. npm readiness
-
-`effing-use` is publishable with fixes. Verified 2026-09-05:
-
-- Name `effing-use` returns 404 on npmjs.com — likely available (confirm with `npm view effing-use`).
-- Missing: `LICENSE` file + `license` field (skill declares MIT), `repository`, `files`, `engines`, `publishConfig.access`.
-- `bin` points at Bun source — either publish Bun-only (`bunx effing-use`, requires Bun + `playwright install chromium`) or add a `dist/` build and point `bin` there for Node `npx` users.
-- `node_modules` is ~59 MB (mostly `playwright`) — keep `playwright` as a dependency, document the Chromium install step.
-- Publish: `npm login` (2FA or granular token) → `npm publish --dry-run` → `npm publish` (or `bun publish`). CI alternative: trusted publishing.
-
-## 9. FAQ
+## 8. FAQ
 
 **Is the 5x claim real?** Yes — weighed locally, same method both sides: 3,913 vs 19,517 bytes. Re-run the two commands in [Reproduce](#reproduce).
 

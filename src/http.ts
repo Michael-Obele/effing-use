@@ -6,6 +6,7 @@ const port = Number(process.env.PORT ?? 3000);
 
 // Streamable HTTP transport (MCP spec). Serves the MCP endpoint at /mcp.
 // No auth on local loopback; put a reverse proxy / tunnel in front for remote use.
+// Bun-only: Bun.serve keeps this file dependency-free (no node:http shim).
 const transport = new HttpTransport(server, { path: "/mcp" });
 
 Bun.serve({

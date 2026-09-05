@@ -1,8 +1,42 @@
 # effing-use — stop paying 19.5 KB every session for browser control
 
+[![npm version](https://img.shields.io/npm/v/effing-use)](https://www.npmjs.com/package/effing-use) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Bun](https://img.shields.io/badge/runtime-Bun%201.4%2B-black?logo=bun)](https://bun.sh)
+
 Full Chromium automation in **3 tools, 3.9 KB**. Same pages, same clicks, same scrapes — without the 24-tool handshake eating your context window before you load a page.
 
 **Measured, not marketed:** `tools/list` is **3,913 bytes** here vs **19,517 bytes** for `@playwright/mcp@latest` (~5x smaller, ~15.6 KB saved every session). Local ops stay in milliseconds — snapshot ~15 ms, extract ~50 ms, batch ~65 ms, screenshot ~60–190 ms. Page loads still cost seconds (network, not us). Full numbers in [`docs/COMPARISON.md`](docs/COMPARISON.md).
+
+## Install (Bun-only)
+
+Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.1.0](https://www.npmjs.com/package/effing-use)):
+
+```bash
+# No install needed — bunx fetches from npm on first run
+bunx effing-use               # STDIO (single editor) — runs src/index.ts via bin
+bunx effing-use-http          # HTTP on :3000 (/mcp) — shared across editors
+bunx playwright install chromium --only-shell   # one-time Chromium download (~150 MB)
+```
+
+Optional — install globally so `effing-use` is on your PATH:
+
+```bash
+bun install -g effing-use
+effing-use                    # STDIO
+effing-use-http               # HTTP on :3000 (/mcp)
+```
+
+The `playwright` npm package ships the driver, **not** the browser — every user needs Playwright's version-pinned Chromium once. From source instead:
+
+```bash
+bun install
+bunx playwright install chromium --only-shell
+bun src/index.ts              # STDIO
+bun src/http.ts               # HTTP on :3000 (/mcp)
+```
+
+Re-run `bunx playwright install chromium --only-shell` whenever you bump the `playwright` dependency (each Playwright version pins its own browser build). Verify with `bunx playwright install --dry-run chromium` or check `~/.cache/ms-playwright/`.
+
+**Why Chromium is separate:** Playwright supports multiple browsers and updates its pinned builds every release, so the binary can't live inside the npm tarball (ours is 16 kB). Docker users skip this — Chromium is baked into the `mcr.microsoft.com/playwright` base image.
 
 ## Run it in 60 seconds (recommended path)
 
@@ -23,14 +57,14 @@ Point any VS Code instance at `http://localhost:3000/mcp` (see `.vscode/mcp.json
 {
   "mcpServers": {
     "computer-use": {
-      "command": "bun",
-      "args": ["/path/to/litepilot/src/index.ts"]
+      "command": "bunx",
+      "args": ["effing-use"]
     }
   }
 }
 ```
 
-Or HTTP: `http://localhost:3000/mcp`.
+Or HTTP: `http://localhost:3000/mcp` (via `bunx effing-use-http` or Docker). From source instead: `command: "bun"`, `args: ["/path/to/litepilot/src/index.ts"]`.
 
 **Step 3/3 — Drive.** Search Wikipedia in one call instead of two round-trips:
 

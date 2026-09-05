@@ -1,12 +1,26 @@
 {
   "name": "effing-use",
   "version": "0.1.0",
-  "description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Valibot",
-  "type": "module",
-  "bin": {
-    "effing-use": "./src/index.ts"
+  "description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Playwright",
+  "license": "MIT",
+  "author": "Michael Obubelebra Amachree",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Michael-Obele/litepilot.git"
   },
+  "homepage": "https://github.com/Michael-Obele/litepilot#readme",
+  "type": "module",
   "main": "src/index.ts",
+  "bin": {
+    "effing-use": "src/index.ts",
+    "effing-use-http": "src/http.ts"
+  },
+  "files": [
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "bun src/index.ts",
     "start:http": "bun src/http.ts",
@@ -16,18 +30,20 @@
     "test": "bun test"
   },
   "keywords": [
-    "tmcp",
     "mcp",
+    "model-context-protocol",
     "playwright",
-    "browser-automation"
+    "browser-automation",
+    "tmcp",
+    "chromium"
   ],
   "dependencies": {
-    "@tmcp/adapter-valibot": "latest",
+    "@tmcp/adapter-valibot": "^0.1.6",
     "@tmcp/transport-http": "^0.9.0",
-    "@tmcp/transport-stdio": "latest",
-    "playwright": "latest",
-    "tmcp": "latest",
-    "valibot": "latest"
+    "@tmcp/transport-stdio": "^0.5.0",
+    "playwright": "^1.63.0",
+    "tmcp": "^1.20.0",
+    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
