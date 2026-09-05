@@ -1,10 +1,10 @@
 ---
 name: effing-use
-description: Drive a headless Chromium browser through 3 token-efficient MCP tools (browser_act, browser_observe, browser_extract). Use when automating web pages, scraping structured data, screenshotting UIs, filling forms, or testing flows in this repo.
+description: Drive a headless Chromium browser through 3 token-efficient MCP tools (browser_act, browser_observe, browser_extract). Use when automating web pages, scraping structured data, screenshotting UIs, filling forms, or testing web flows.
 license: MIT
 compatibility: Requires the effing-use MCP server (Bun + Playwright Chromium). Works over stdio or Streamable HTTP at /mcp.
 metadata:
-  repo: litepilot/effing-use
+  repo: Michael-Obele/litepilot
   tools: browser_act,browser_observe,browser_extract
 ---
 

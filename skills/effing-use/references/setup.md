@@ -25,11 +25,11 @@ VS Code `.vscode/mcp.json`:
     "effing-use (stdio)": {
       "type": "stdio",
       "command": "bun",
-      "args": ["${workspaceFolder}/src/index.ts"],
-      "cwd": "${workspaceFolder}",
+      "args": ["/path/to/effing-use/src/index.ts"],
+      "cwd": "/path/to/effing-use",
       "env": {
         "BROWSER_HEADLESS": "true",
-        "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
+        "OUTPUT_DIR": "/path/to/effing-use/.browser-use"
       }
     },
     "effing-use (http)": { "type": "http", "url": "http://localhost:3123/mcp" }
@@ -74,7 +74,7 @@ All optional; defaults shown (see `.env.example`):
 ## Gitignore contract
 
 `.browser-use/`, `*.png`, `*.pdf`, `node_modules/` stay out of git.
-The local planning folder (`litepilot/docs/plan/`) is also gitignored —
+Any local planning/scratch folder (e.g. `docs/plan/`) should also be gitignored —
 it holds the build spec, not shippable code.
 
 ## Verify

@@ -27,7 +27,7 @@ PORT=3123 bun src/http.ts            # local Bun route
 ## `bun: not found` during `docker build`
 
 The `curl | bash` Bun installer can break mid-download (`curl: (56)`) yet
-the layer still "succeeds", leaving no binary. This repo copies Bun from
+the layer still "succeeds", leaving no binary. The effing-use Dockerfile copies Bun from
 the pinned `oven/bun` image instead — deterministic, no network flakiness:
 
 ```dockerfile
