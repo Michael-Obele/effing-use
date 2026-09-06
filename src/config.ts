@@ -1,5 +1,12 @@
 import * as v from "valibot";
 
+// The npm package version — single source of truth is package.json, so the MCP
+// server's reported version (serverInfo.version) never drifts from the
+// published release.
+export const VERSION = (
+  await Bun.file(new URL("../package.json", import.meta.url)).json()
+).version as string;
+
 const ConfigSchema = v.object({
   headless: v.optional(v.boolean(), true),
   viewportW: v.optional(v.number(), 1280),

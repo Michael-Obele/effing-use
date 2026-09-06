@@ -8,7 +8,7 @@ Full Chromium automation in **3 tools, 3.9 KB**. Same pages, same clicks, same s
 
 ## Install (Bun-only)
 
-Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.1.0](https://www.npmjs.com/package/effing-use)):
+Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.1.1](https://www.npmjs.com/package/effing-use)):
 
 ```bash
 # No install needed — bunx fetches from npm on first run
