@@ -11,6 +11,14 @@ const transport = new HttpTransport(server, { path: "/mcp" });
 
 Bun.serve({
   port,
+  // Bun closes idle connections after 10s by default (idleTimeout), and the
+  // timer applies even while a response is being streamed. The MCP
+  // Streamable-HTTP SSE notification stream sits idle between server->client
+  // messages, so Bun was killing it every ~10s and clients logged
+  // "Error reading from async stream: terminated" on a loop until the
+  // connection hard-failed. idleTimeout: 0 disables the idle close entirely
+  // (safe: this server is meant for local loopback / private networks).
+  idleTimeout: 0,
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === "/healthz") {

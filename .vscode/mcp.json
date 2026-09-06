@@ -1,18 +1,20 @@
 {
+  // effing-use MCP servers — both run the published npm package (effing-use).
+  // HTTP server (shared across editors): start once with
+  //   PORT=3123 bunx --package effing-use effing-use-http
   "servers": {
+    "effing-use (http)": {
+      "type": "http",
+      "url": "http://localhost:3123/mcp"
+    },
     "effing-use (stdio)": {
       "type": "stdio",
-      "command": "bun",
-      "args": ["${workspaceFolder}/src/index.ts"],
-      "cwd": "${workspaceFolder}",
+      "command": "bunx",
+      "args": ["--package", "effing-use", "effing-use"],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
       }
-    },
-    "effing-use (http)": {
-      "type": "http",
-      "url": "http://localhost:3123/mcp"
     }
   }
 }
