@@ -21,6 +21,10 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "start": "bun src/index.ts",
     "start:http": "bun src/http.ts",

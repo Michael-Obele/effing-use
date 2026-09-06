@@ -3,6 +3,7 @@ node_modules/
 *.png
 *.pdf
 *.yml
+!.github/workflows/*.yml
 .fallow/
 dist/
 build/
