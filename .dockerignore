@@ -2,7 +2,7 @@ node_modules
 .browser-use
 .git
 .gitignore
-litepilot
+effing-use
 **/plan/
 .fallow
 dist
