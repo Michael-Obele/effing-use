@@ -1,6 +1,6 @@
 {
   "name": "effing-use",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Token-efficient browser control: 3 tools (act, observe, extract) built with tmcp + Bun + Playwright",
   "license": "MIT",
   "author": "Michael Obubelebra Amachree",
