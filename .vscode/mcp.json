@@ -15,6 +15,17 @@
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
       }
+    },
+    // npm-published version, pinned — resolves once effing-use@0.1.1 is on npm
+    // (published by .github/workflows/publish.yml via Trusted Publisher)
+    "effing-use-npm": {
+      "type": "stdio",
+      "command": "bunx",
+      "args": ["--package", "effing-use@0.1.1", "effing-use"],
+      "env": {
+        "BROWSER_HEADLESS": "true",
+        "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
+      }
     }
   }
 }
