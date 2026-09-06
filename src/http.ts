@@ -2,7 +2,7 @@
 import { HttpTransport } from "@tmcp/transport-http";
 import { server } from "./server.js";
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 3123);
 
 // Streamable HTTP transport (MCP spec). Serves the MCP endpoint at /mcp.
 // No auth on local loopback; put a reverse proxy / tunnel in front for remote use.

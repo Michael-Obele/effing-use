@@ -3,6 +3,7 @@ node_modules
 .git
 .gitignore
 litepilot
+**/plan/
 .fallow
 dist
 build

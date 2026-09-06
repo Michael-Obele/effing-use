@@ -99,8 +99,8 @@ Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIM
 |            | effing-use                                                                                                            | Playwright MCP                                                                 |
 | ---------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Runtime    | Bun + Playwright Chromium (`bunx playwright install chromium --only-shell`)                                           | Node 18+ via `npx @playwright/mcp@latest`                                      |
-| Transports | STDIO (`bun src/index.ts`) + Streamable HTTP (`bun src/http.ts` → `/mcp`, `:3000`)                                    | STDIO + `--port` HTTP                                                          |
-| Sharing    | `docker compose up --build -d` → any local VS Code instance hits `http://localhost:3000/mcp`                          | per-client `npx` spawn (or `--isolated` / `--user-data-dir` for profiles)      |
+| Transports | STDIO (`bun src/index.ts`) + Streamable HTTP (`bun src/http.ts` → `/mcp`, `:3123`)                                    | STDIO + `--port` HTTP                                                          |
+| Sharing    | `docker compose up --build -d` → any local VS Code instance hits `http://localhost:3123/mcp`                          | per-client `npx` spawn (or `--isolated` / `--user-data-dir` for profiles)      |
 | Browsers   | Chromium only (headless in Docker)                                                                                    | Chromium, Firefox, WebKit, Edge channels + `--caps` (vision, pdf, devtools)    |
 | Config     | env: `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR`, `OUTPUT_MAX_CHARS`, `ALLOW_EVAL` | 30+ CLI flags (`--browser`, `--caps`, `--viewport-size`, `--storage-state`, …) |
 

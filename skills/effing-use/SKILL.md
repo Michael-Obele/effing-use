@@ -4,7 +4,7 @@ description: Drive a headless Chromium browser through 3 token-efficient MCP too
 license: MIT
 compatibility: Requires the effing-use MCP server (Bun + Playwright Chromium). Works over stdio or Streamable HTTP at /mcp.
 metadata:
-  repo: Michael-Obele/litepilot
+  repo: Michael-Obele/effing-use
   tools: browser_act,browser_observe,browser_extract
 ---
 
@@ -53,6 +53,6 @@ Errors always come back as `{ ok: false, code, message, hint }` with codes
 ## Setup
 
 See [references/setup.md](references/setup.md) for install (local Bun,
-Docker, VS Code `mcp.json` entries), port config (`ECU_PORT`), and the
+Docker, VS Code `mcp.json` entries), port config (`EFFING_PORT`), and the
 `.browser-use/` gitignore contract. See [references/troubleshooting.md](references/troubleshooting.md)
 for port conflicts, Chromium sandbox notes, and the `doQuery` arity lesson.

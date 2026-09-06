@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "litepilot",
+      "name": "effing-use",
       "dependencies": {
         "@tmcp/adapter-valibot": "latest",
         "@tmcp/transport-http": "^0.9.0",

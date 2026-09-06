@@ -1,7 +1,7 @@
 name: effing-use
 
 services:
-  computer-use:
+  effing-use:
     build: .
     image: effing-use:local
     # Playwright docs: --init avoids PID=1 zombie issues, --ipc=host keeps
@@ -13,12 +13,12 @@ services:
     # started at least once with `up -d`; Docker then keeps it alive)
     restart: unless-stopped
     ports:
-      # Host port is configurable: ECU_PORT=3123 docker compose up
-      # (container always listens on 3000 internally, so only the
+      # Host port is configurable: EFFING_PORT=3123 docker compose up
+      # (container always listens on 3123 internally, so only the
       # left-hand side changes — healthcheck and app config stay as-is)
-      - "${ECU_PORT:-3000}:3000"
+      - "${EFFING_PORT:-3123}:3123"
     environment:
-      PORT: "3000"
+      PORT: "3123"
       BROWSER_HEADLESS: "true"
       BROWSER_VIEWPORT_W: "1280"
       BROWSER_VIEWPORT_H: "800"
@@ -35,7 +35,7 @@ services:
           "CMD",
           "bun",
           "-e",
-          "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)process.exit(1)})",
+          "fetch('http://localhost:3123/healthz').then(r=>{if(!r.ok)process.exit(1)})",
         ]
       interval: 10s
       timeout: 5s

@@ -12,7 +12,7 @@ docker ps --format "{{.Names}} {{.Ports}}"
 Fix — move our host port, never the container's:
 
 ```bash
-ECU_PORT=3123 docker compose up -d   # client → http://localhost:3123/mcp
+EFFING_PORT=3123 docker compose up -d   # client → http://localhost:3123/mcp
 PORT=3123 bun src/http.ts            # local Bun route
 ```
 

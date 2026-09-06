@@ -14,7 +14,7 @@
 bun install
 bunx playwright install chromium --only-shell
 bun src/index.ts          # STDIO transport
-bun src/http.ts           # Streamable HTTP on $PORT (default 3000), MCP at /mcp
+bun src/http.ts           # Streamable HTTP on $PORT (default 3123), MCP at /mcp
 ```
 
 VS Code `.vscode/mcp.json`:
@@ -40,12 +40,12 @@ VS Code `.vscode/mcp.json`:
 ## Option B — Docker (shared across VS Code instances)
 
 ```bash
-ECU_PORT=3123 docker compose up --build -d
+EFFING_PORT=3123 docker compose up --build -d
 curl http://localhost:3123/healthz   # {"ok":true,"name":"effing-use"}
 ```
 
-Then point any local client at `http://localhost:<ECU_PORT>/mcp`.
-The container listens on 3000 internally; only the host-side port moves.
+Then point any local client at `http://localhost:<EFFING_PORT>/mcp`.
+The container listens on 3123 internally; only the host-side port moves.
 
 - `restart: unless-stopped` — survives daemon restarts and host reboots
   once started with `up -d`.
@@ -62,8 +62,8 @@ All optional; defaults shown (see `.env.example`):
 
 | Var                    | Default        | Notes                                          |
 | ---------------------- | -------------- | ---------------------------------------------- |
-| `PORT`                 | `3000`         | `src/http.ts` listen port (container-internal) |
-| `ECU_PORT`             | `3000`         | compose host-side port override                |
+| `PORT`                 | `3123`         | `src/http.ts` listen port (container-internal) |
+| `EFFING_PORT`          | `3123`         | compose host-side port override                |
 | `BROWSER_HEADLESS`     | `true`         | Docker supports headless Chromium only         |
 | `BROWSER_VIEWPORT_W/H` | `1280/800`     |                                                |
 | `BROWSER_TIMEOUT_MS`   | `15000`        | per-action Playwright timeout                  |

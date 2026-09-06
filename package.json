@@ -6,9 +6,9 @@
   "author": "Michael Obubelebra Amachree",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Michael-Obele/litepilot.git"
+    "url": "git+https://github.com/Michael-Obele/effing-use.git"
   },
-  "homepage": "https://github.com/Michael-Obele/litepilot#readme",
+  "homepage": "https://github.com/Michael-Obele/effing-use#readme",
   "type": "module",
   "main": "src/index.ts",
   "bin": {

@@ -8,6 +8,4 @@ dist/
 build/
 
 # plan folder (local planning docs, not committed)
-litepilot/
 **/plan/
-litepilot/docs/plan/

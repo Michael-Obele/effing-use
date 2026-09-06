@@ -13,7 +13,7 @@ Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarbal
 ```bash
 # No install needed — bunx fetches from npm on first run
 bunx effing-use               # STDIO (single editor) — runs src/index.ts via bin
-bunx effing-use-http          # HTTP on :3000 (/mcp) — shared across editors
+bunx effing-use-http          # HTTP on :3123 (/mcp) — shared across editors
 bunx playwright install chromium --only-shell   # one-time Chromium download (~150 MB)
 ```
 
@@ -22,7 +22,7 @@ Optional — install globally so `effing-use` is on your PATH:
 ```bash
 bun install -g effing-use
 effing-use                    # STDIO
-effing-use-http               # HTTP on :3000 (/mcp)
+effing-use-http               # HTTP on :3123 (/mcp)
 ```
 
 The `playwright` npm package ships the driver, **not** the browser — every user needs Playwright's version-pinned Chromium once. From source instead:
@@ -31,7 +31,7 @@ The `playwright` npm package ships the driver, **not** the browser — every use
 bun install
 bunx playwright install chromium --only-shell
 bun src/index.ts              # STDIO
-bun src/http.ts               # HTTP on :3000 (/mcp)
+bun src/http.ts               # HTTP on :3123 (/mcp)
 ```
 
 Re-run `bunx playwright install chromium --only-shell` whenever you bump the `playwright` dependency (each Playwright version pins its own browser build). Verify with `bunx playwright install --dry-run chromium` or check `~/.cache/ms-playwright/`.
@@ -46,17 +46,17 @@ Re-run `bunx playwright install chromium --only-shell` whenever you bump the `pl
 bun install
 bunx playwright install chromium --only-shell
 docker compose up --build -d
-curl http://localhost:3000/healthz
+curl http://localhost:3123/healthz
 ```
 
-Point any VS Code instance at `http://localhost:3000/mcp` (see `.vscode/mcp.json` → `effing-use (http)`). Plain HTTP on loopback is intentional — add TLS at the edge for remote use.
+Point any VS Code instance at `http://localhost:3123/mcp` (see `.vscode/mcp.json` → `effing-use (http)`). Plain HTTP on loopback is intentional — add TLS at the edge for remote use.
 
 **Step 2/3 — Connect.** STDIO for one editor, HTTP for all of them:
 
 ```json
 {
   "mcpServers": {
-    "computer-use": {
+    "effing-use": {
       "command": "bunx",
       "args": ["effing-use"]
     }
@@ -64,7 +64,7 @@ Point any VS Code instance at `http://localhost:3000/mcp` (see `.vscode/mcp.json
 }
 ```
 
-Or HTTP: `http://localhost:3000/mcp` (via `bunx effing-use-http` or Docker). From source instead: `command: "bun"`, `args: ["/path/to/litepilot/src/index.ts"]`.
+Or HTTP: `http://localhost:3123/mcp` (via `bunx effing-use-http` or Docker). From source instead: `command: "bun"`, `args: ["/path/to/effing-use/src/index.ts"]`.
 
 **Step 3/3 — Drive.** Search Wikipedia in one call instead of two round-trips:
 
@@ -79,7 +79,7 @@ Or HTTP: `http://localhost:3000/mcp` (via `bunx effing-use-http` or Docker). Fro
 }
 ```
 
-No Docker? `bun src/index.ts` (STDIO) or `bun src/http.ts` (`:3000` `/mcp`) works directly.
+No Docker? `bun src/index.ts` (STDIO) or `bun src/http.ts` (`:3123` `/mcp`) works directly.
 
 ## Why agents prefer 3 tools
 

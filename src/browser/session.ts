@@ -18,8 +18,15 @@ interface SessionEntry {
 const sessions = new Map<string, SessionEntry>();
 
 async function getBrowser(config: Config): Promise<Browser> {
+  if (browser && !browser.isConnected()) {
+    sessions.clear();
+    browser = null;
+  }
   if (!browser) {
-    browser = await chromium.launch({ headless: config.headless });
+    browser = await chromium.launch({
+      headless: config.headless,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    });
   }
   return browser;
 }
@@ -29,7 +36,8 @@ export async function getPage(
   sessionId = "default",
 ): Promise<Page> {
   const existing = sessions.get(sessionId);
-  if (existing) return existing.page;
+  if (existing && !existing.page.isClosed()) return existing.page;
+  if (existing) sessions.delete(sessionId);
   const b = await getBrowser(config);
   const context = await b.newContext({
     viewport: { width: config.viewportW, height: config.viewportH },
@@ -66,7 +74,7 @@ export async function getContext(
   sessionId = "default",
 ): Promise<BrowserContext> {
   const existing = sessions.get(sessionId);
-  if (existing) return existing.context;
+  if (existing && !existing.page.isClosed()) return existing.context;
   await getPage(config, sessionId);
   return sessions.get(sessionId)!.context;
 }
@@ -86,7 +94,7 @@ export function getNetworkLogs(
 export async function closeSession(sessionId = "default"): Promise<void> {
   const s = sessions.get(sessionId);
   if (s) {
-    await s.context.close();
+    await s.context.close().catch(() => undefined);
     sessions.delete(sessionId);
   }
 }
