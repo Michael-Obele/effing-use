@@ -8,14 +8,14 @@ Full Chromium automation in **3 tools, 3.9 KB**. Same pages, same clicks, same s
 
 ## Install (Bun-only)
 
-Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.1.1](https://www.npmjs.com/package/effing-use)):
+Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.2.0](https://www.npmjs.com/package/effing-use)):
 
 ```bash
 # No install needed — bunx fetches from npm on first run
-bunx effing-use               # CLI (needs running server) — effing-use observe/act/extract
-bunx effing-use-http          # HTTP MCP on :3123 (/mcp) — shared across editors
-bunx effing-use-stdio         # STDIO MCP (single editor) — legacy bin
-bunx playwright install chromium --only-shell   # one-time Chromium download (~150 MB)
+bunx --package effing-use effing-use               # CLI (needs running server)
+bunx --package effing-use effing-use-http          # HTTP MCP on :3123 (/mcp) — shared across editors
+bunx --package effing-use effing-use-stdio         # STDIO MCP (single editor)
+bunx playwright install chromium --only-shell       # one-time Chromium download (~150 MB)
 ```
 
 Optional — install globally so `effing-use` is on your PATH:
@@ -41,33 +41,66 @@ Re-run `bunx playwright install chromium --only-shell` whenever you bump the `pl
 
 **Why Chromium is separate:** Playwright supports multiple browsers and updates its pinned builds every release, so the binary can't live inside the npm tarball (ours is 16 kB). Docker users skip this — Chromium is baked into the `mcr.microsoft.com/playwright` base image.
 
+### npm vs source
+
+| Source                                | Command                                                 | When to use                                                                    |
+| ------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **npm** (`bunx --package effing-use`) | `effing-use`, `effing-use-http`, `effing-use-stdio`     | Recommended — always matches published `package.json` version, no clone needed |
+| **source** (`bun src/*.ts`)           | `bun src/cli.ts`, `bun src/http.ts`, `bun src/index.ts` | Local dev / unreleased changes                                                 |
+
+Both expose the same 3 bins: `effing-use` = CLI (HTTP client), `effing-use-stdio` = MCP stdio, `effing-use-http` = MCP http. Don't mix them — `effing-use` alone is **not** an MCP server (it prints CLI help and exits, causing `Failed to parse message` / `MCP server has stopped`).
+
 ## Run it in 60 seconds (recommended path)
 
 **Step 1/3 — Start the server.** One server, every local editor:
 
 ```bash
+# Docker (recommended — Chromium baked in, no local install)
+docker compose up --build -d
+curl http://localhost:3123/healthz   # {"ok":true,"name":"effing-use"}
+
+# Or without Docker
 bun install
 bunx playwright install chromium --only-shell
-docker compose up --build -d
-curl http://localhost:3123/healthz
+bun src/http.ts   # or: bunx --package effing-use effing-use-http
 ```
 
-Point any VS Code instance at `http://localhost:3123/mcp` (see `.vscode/mcp.json` → `effing-use (http)`). Plain HTTP on loopback is intentional — add TLS at the edge for remote use.
+The HTTP server binds `0.0.0.0:3123` inside Docker (so forwarded ports work) and sets `idleTimeout: 0` so the MCP SSE stream isn't killed after 10s of idle time. Plain HTTP on loopback is intentional — add TLS at the edge for remote use.
 
-**Step 2/3 — Connect.** STDIO for one editor, HTTP for all of them:
+**Step 2/3 — Connect.** Pick one transport:
+
+**HTTP (shared — recommended for multiple VS Code windows):**
+
+```json
+// ~/.config/Code/User/mcp.json  (global, all workspaces) or .vscode/mcp.json
+{
+  "servers": {
+    "effing-use": { "type": "http", "url": "http://localhost:3123/mcp" }
+  }
+}
+```
+
+One Docker/bun process serves every window. Use same `sessionId` to share tabs, different `sessionId` to isolate.
+
+**STDIO (isolated — one browser per window):**
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "effing-use": {
+      "type": "stdio",
       "command": "bunx",
-      "args": ["effing-use-stdio"]
+      "args": ["--package", "effing-use", "effing-use-stdio"],
+      "env": {
+        "BROWSER_HEADLESS": "true",
+        "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
+      }
     }
   }
 }
 ```
 
-Or HTTP: `http://localhost:3123/mcp` (via `bunx effing-use-http` or Docker). From source instead: `command: "bun"`, `args: ["/path/to/effing-use/src/index.ts"]`.
+From source: `command: "bun"`, `args: ["/absolute/path/to/effing-use/src/index.ts"]`.
 
 **CLI vs MCP — when to use which:**
 
@@ -93,6 +126,46 @@ The CLI is a thin HTTP client over the same engine — `effing-use observe --kin
 ```
 
 No Docker? `bun src/cli.ts --help` (CLI), `bun src/index.ts` (STDIO MCP), or `bun src/http.ts` (`:3123` `/mcp`) works directly.
+
+### CLI usage
+
+The CLI needs a running HTTP server (`EFFING_USE_URL` defaults to `http://localhost:3123/mcp`):
+
+```bash
+# Observe
+effing-use observe --kind snapshot --mode delta --session dev
+effing-use observe --kind title --session dev
+effing-use observe --kind screenshot --session dev
+
+# Act
+effing-use act --action open --value https://example.com --session dev
+effing-use act --action click --target e5 --expect 'url~/dashboard' --session dev
+effing-use act --action batch --file steps.json --session dev
+
+# Extract
+effing-use extract --kind text --selector main --session dev
+effing-use extract --kind state --session dev
+
+# With custom server URL
+EFFING_USE_URL=http://localhost:3123/mcp effing-use observe --kind snapshot
+```
+
+From npm without global install: `bunx --package effing-use effing-use observe --kind snapshot`.
+
+### Docker
+
+```bash
+docker compose up --build -d          # build + start (0.0.0.0:3123, idleTimeout:0)
+docker compose logs -f effing-use     # tail logs
+curl http://localhost:3123/healthz    # health check
+docker compose down                   # stop (add -v to remove volumes)
+# Rebuild after pulling new code
+docker compose up --build -d
+# Orphaned old container holding :3123? (renamed service)
+docker rm -f effing-use-computer-use-1 && docker compose up -d
+```
+
+Compose details: `restart: unless-stopped`, `init: true` + `ipc: host` (Playwright flags), `.browser-use/` bind-mounted, `EFFING_PORT` overrides host port (`EFFING_PORT=4000 docker compose up -d`).
 
 ## Why agents prefer 3 tools
 
