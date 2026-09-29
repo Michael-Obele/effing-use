@@ -82,31 +82,53 @@ Screenshots, PDFs, and traces are never inlined as base64 — the response is a 
 | `browser_observe` (8 kinds) | snapshot (e-refs), screenshot (path), url, title, console, network, tabs, focused                                                                                                                             |
 | `browser_extract` (7 kinds) | text, html, table (≤100 rows JSON), query (text\|href\|json), pdf, trace_start/stop                                                                                                                           |
 
-Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIMEOUT | E_NO_PAGE | E_BAD_INPUT | E_GOAL_UNCLEAR` — never a stack trace.
+Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIMEOUT | E_NO_PAGE | E_BAD_INPUT | E_GOAL_UNCLEAR | E_STALE | E_EXPECT | E_BAD_EXPECT | E_MUST_OBSERVE | E_APPROVAL_REQUIRED` — never a stack trace.
+
+### Harness — what v2 adds over a plain browser tool
+
+Plain browser tools are fire-and-forget. v2 makes them a harness: verifiable, diffable, replayable.
+
+| Pillar     | Feature                              | What it does                                                                                                                                 | Why it helps AI                                                           |
+| ---------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Verify** | Fingerprint registry (`identity.ts`) | Every `eN` ref fingerprinted (role, accessibleName, textHash, box, pathHash); stale refs rebind only when unambiguous, else `E_STALE`        | Never guesses → no wrong-element clicks                                   |
+| **Verify** | `expect` mini-language               | `url~/re` \| `text~/re` \| `visible=css` \| `gone=css` on any `browser_act`, ReDoS-capped                                                    | Deterministic post-conditions, `E_EXPECT` instead of hallucinated success |
+| **Verify** | Evidence envelope                    | Every act returns `effect: { urlChanged, domChanged, consoleErrors, networkFailures }` (800-char cap)                                        | Agent sees what actually happened                                         |
+| **Verify** | Failure contract                     | After uncertain mutation `mustObserve:true` → next mutation `E_MUST_OBSERVE` until re-snapshot                                               | No blind chains                                                           |
+| **Delta**  | `mode=delta` + `scope`               | MutationObserver dirty flag + baseline diff; `unchanged:true` or `[changed]` lines                                                           | ~90% token saving on stable pages                                         |
+| **State**  | `note` + `state`                     | Per-session `notes` ring (40) + `lastActions` (10), persisted to `.browser-use/state/*.md`                                                   | Survives context compaction                                               |
+| **Replay** | `record` → `compile` → `replay`      | Captures resolved selectors + fingerprints; `compile` emits `.ts` + `SKILL.md`; secrets `«redacted»`; irreversible steps need `approve:true` | Deterministic macros, not prompt-dependent                                |
+| **CLI**    | `effing-use observe/act/extract`     | Thin HTTP client over `EFFING_USE_URL`                                                                                                       | Terminal agents / CI without MCP                                          |
+
+Playwright MCP has none of these — it returns raw trees and relies on the agent to verify.
 
 ### Failure modes
 
-| Situation                | effing-use                                          | Notes                                                                              |
-| ------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Bad ref / missing target | `E_NOT_FOUND` + hint to re-snapshot                 | Refs are nth-match (`eN`), never guessed; re-snapshot after navigation             |
-| Slow page / selector     | `E_TIMEOUT` (default 15 s via `BROWSER_TIMEOUT_MS`) | Tune per env                                                                       |
-| No page / closed session | `E_NO_PAGE`                                         | Session per `sessionId`, default `"default"`                                       |
-| Vague `goal`             | `E_GOAL_UNCLEAR` + `suggestedSteps`                 | Deterministic planner, not magic — it tells you the steps instead of hallucinating |
-| `batch` with >20 steps   | `E_BAD_INPUT`, page untouched                       | Guard verified by unit test                                                        |
+| Situation                | effing-use                                                    | Notes                                                                              |
+| ------------------------ | ------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Bad ref / missing target | `E_NOT_FOUND` + hint to re-snapshot                           | Refs are nth-match (`eN`), never guessed; re-snapshot after navigation             |
+| Slow page / selector     | `E_TIMEOUT` (default 15 s via `BROWSER_TIMEOUT_MS`)           | Tune per env                                                                       |
+| No page / closed session | `E_NO_PAGE`                                                   | Session per `sessionId`, default `"default"`                                       |
+| Vague `goal`             | `E_GOAL_UNCLEAR` + `suggestedSteps`                           | Deterministic planner, not magic — it tells you the steps instead of hallucinating |
+| `batch` with >20 steps   | `E_BAD_INPUT`, page untouched                                 | Guard verified by unit test                                                        |
+| Stale ref                | `E_STALE` + hint, or rebind (`rebound:true` when unambiguous) | Fingerprint mismatch after DOM change — re-snapshot or accept rebind               |
+| Expect mismatch          | `E_EXPECT` (mismatch) / `E_BAD_EXPECT` (bad syntax)           | `url~`/`text~` regex or `visible=`/`gone=` check failed                            |
+| Blind mutation           | `E_MUST_OBSERVE`                                              | Must `browser_observe snapshot` before next mutating act                           |
+| Irreversible replay      | `E_APPROVAL_REQUIRED`                                         | `replay` without `approve:true` on submit/pay/delete steps                         |
 
 ## 5. Setup / ops
 
-|            | effing-use                                                                                                            | Playwright MCP                                                                 |
-| ---------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Runtime    | Bun + Playwright Chromium (`bunx playwright install chromium --only-shell`)                                           | Node 18+ via `npx @playwright/mcp@latest`                                      |
-| Transports | STDIO (`bun src/index.ts`) + Streamable HTTP (`bun src/http.ts` → `/mcp`, `:3123`)                                    | STDIO + `--port` HTTP                                                          |
-| Sharing    | `docker compose up --build -d` → any local VS Code instance hits `http://localhost:3123/mcp`                          | per-client `npx` spawn (or `--isolated` / `--user-data-dir` for profiles)      |
-| Browsers   | Chromium only (headless in Docker)                                                                                    | Chromium, Firefox, WebKit, Edge channels + `--caps` (vision, pdf, devtools)    |
-| Config     | env: `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR`, `OUTPUT_MAX_CHARS`, `ALLOW_EVAL` | 30+ CLI flags (`--browser`, `--caps`, `--viewport-size`, `--storage-state`, …) |
+|            | effing-use                                                                                                                                                                                                       | Playwright MCP                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Runtime    | Bun + Playwright Chromium (`bunx playwright install chromium --only-shell`)                                                                                                                                      | Node 18+ via `npx @playwright/mcp@latest`                                      |
+| Transports | STDIO (`bun src/index.ts`) + Streamable HTTP (`bun src/http.ts` → `/mcp`, `:3123`, `0.0.0.0` in Docker, `idleTimeout:0`)                                                                                         | STDIO + `--port` HTTP                                                          |
+| Sharing    | `docker compose up --build -d` → any local VS Code instance hits `http://localhost:3123/mcp` (`http` MCP type, shared `sessionId`)                                                                               | per-client `npx` spawn (or `--isolated` / `--user-data-dir` for profiles)      |
+| Browsers   | Chromium only (headless in Docker)                                                                                                                                                                               | Chromium, Firefox, WebKit, Edge channels + `--caps` (vision, pdf, devtools)    |
+| Config     | env: `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR`, `OUTPUT_MAX_CHARS`, `ALLOW_EVAL`, `DELTA_DEFAULT`, `EFFECT_MAX_CHARS`, `STATE_MAX_LINES`, `RECORD_REDACT`, `EFFING_USE_URL` | 30+ CLI flags (`--browser`, `--caps`, `--viewport-size`, `--storage-state`, …) |
+| Bins       | `effing-use` (CLI) + `effing-use-stdio` (MCP stdio) + `effing-use-http` (MCP http) — all via `bunx --package effing-use` or `bun src/*.ts`                                                                       | `npx @playwright/mcp` (single bin)                                             |
 
 ## 6. When to choose which
 
-Choose **effing-use** when: context budget matters, you live in Chromium, you want one shared server (Docker + `/mcp`) for every local editor, and you prefer capped previews + file paths over full trees.
+Choose **effing-use** when: context budget matters, you live in Chromium, you want one shared server (Docker + `/mcp`) for every local editor, you prefer capped previews + file paths over full trees, and you want a harness (verify/delta/state/replay) instead of raw clicks.
 
 Choose **Playwright MCP** when: you need Firefox/WebKit/Edge channels, device emulation, persistent profiles (`--user-data-dir` / `--storage-state`), vision-coordinate tools, or the 30+ flag config surface.
 
@@ -114,7 +136,7 @@ Choose **Playwright MCP** when: you need Firefox/WebKit/Edge channels, device em
 
 - Chromium-only. If you need Firefox/WebKit, device emulation, or vision-coordinate tools, Playwright MCP is the right call.
 - Bun-first: `bin` currently points at `src/index.ts` with a Bun shebang. Node-only `npx` users need a build step.
-- No persistent profiles yet — sessions are per-`sessionId`, storage state flags don't exist.
+- No persistent profiles yet — sessions are per-`sessionId`, storage state flags don't exist (harness state is `.browser-use/state/*.md` + recordings/macros, not browser storage).
 - `goal` is a deterministic planner, not magic: unclear goals return `E_GOAL_UNCLEAR` + `suggestedSteps`.
 - Playwright MCP local-op speed not measured here — both servers pay the same network cost on page loads; the measured gap is handshake weight and output strategy, not navigation speed.
 

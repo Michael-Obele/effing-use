@@ -8,7 +8,7 @@ Full Chromium automation in **3 tools, 3.9 KB**. Same pages, same clicks, same s
 
 ## Install (Bun-only)
 
-Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.2.0](https://www.npmjs.com/package/effing-use)):
+Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.2.1](https://www.npmjs.com/package/effing-use)):
 
 ```bash
 # No install needed — bunx fetches from npm on first run
@@ -175,6 +175,36 @@ Compose details: `restart: unless-stopped`, `init: true` + `ipc: host` (Playwrig
 - ⚡ **One call, not five** — `batch` runs fill+press flows in one turn (max 20 steps, stops on first error). `goal` plans or returns `E_GOAL_UNCLEAR` + `suggestedSteps` instead of hallucinating.
 - 🐳 **Shared, not spawned** — one Docker server serves every local VS Code instance. No per-client `npx` spawn.
 
+## Harness — verify, delta, state, replay
+
+v2 turns the browser into a harness: AI actions are verifiable, diffable, and replayable — not just fire-and-forget clicks.
+
+**1. Verify — fingerprints + expectations + failure contract**
+
+- **Fingerprint registry** (`src/browser/identity.ts`): every `eN` ref is fingerprinted (role, accessibleName, textHash, box, pathHash). Stale refs rebind only on an UNAMBIGUOUS identity match (`rebound:true`); if several elements match equally they fail with `E_STALE` + hint — the engine never guesses a target.
+- **Expect mini-language** (`expect` on any `browser_act`): `url~/dashboard` | `text~/Saved/` | `visible=.modal` | `gone=.spinner` — evaluated server-side, returns `E_EXPECT` / `E_BAD_EXPECT` on mismatch instead of hallucinated success. ReDoS-capped and regex-validated.
+- **Failure contract**: after an uncertain mutation the engine sets `mustObserve:true` — next mutation fails with `E_MUST_OBSERVE` until you re-snapshot. No blind chains.
+- **Evidence envelope**: every `browser_act` returns `effect: { urlChanged, urlBefore/After, domChanged, consoleErrors, networkFailures }` capped at `EFFECT_MAX_CHARS` (800) so the agent sees what actually happened.
+
+**2. Delta — pay only for what changed**
+
+- `browser_observe kind=snapshot mode=delta` (default) — MutationObserver dirty flag + baseline diff. Returns only `[changed]` lines or `unchanged:true` on stable pages (~90% token saving). `mode=full` for complete dump, `scope="<css>"` for subtree.
+- `DELTA_DEFAULT=true` — flip to `false` to default to full snapshots.
+
+**3. State — per-session memory**
+
+- `browser_act action=note value="..."` appends to `notes` (capped `STATE_MAX_LINES=40`), `browser_extract kind=state` reads `notes` + `lastActions` ring (last 10). Persisted to `.browser-use/state/<session>.md` so agents survive context compaction.
+
+**4. Record → Compile → Replay — deterministic macros**
+
+- `record_start` / `record_stop` captures every step with resolved selectors + fingerprints. Secrets auto-redacted (`RECORD_REDACT=true`, `«redacted»` for password/otp/token fields).
+- `compile` generates `.browser-use/macros/<name>.{ts,md}` — a Playwright `run(page)` function + a `SKILL.md` doc. Irreversible steps (`submit`/`pay`/`delete`/etc.) are flagged `requiresApproval`.
+- `replay` replays deterministically; pauses with `E_APPROVAL_REQUIRED` until `approve:true` if any irreversible step exists.
+
+**5. CLI — same engine, no MCP client**
+
+- `effing-use observe/act/extract` over `EFFING_USE_URL` (`http://localhost:3123/mcp`) — for terminal agents, scripts, and CI. See [CLI usage](#cli-usage).
+
 ## The loop (agents: follow this order)
 
 1. `browser_observe` kind=`snapshot` → get `[eN]` refs (default `mode: delta` — only changed lines; `mode: full` for complete dump; `scope: "<css>"` for subtree). Never guess refs, re-snapshot after navigation.
@@ -203,17 +233,26 @@ Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIM
 
 Need Firefox/WebKit, device emulation, or persistent profiles? Use Playwright MCP. Need context budget for Chromium work? Stay here. Full breakdown in [`docs/COMPARISON.md`](docs/COMPARISON.md).
 
-## Record → replay
+## Record → replay (harness)
 
 ```bash
-# MCP
+# MCP — capture any flow, compile to code + skill, replay deterministically
 browser_act action=record_start value=my-flow
-# ... do the flow ...
-browser_act action=record_stop
-browser_act action=compile value=my-flow   # -> .browser-use/macros/my-flow.{ts,md}
-browser_act action=replay value=my-flow    # pauses with E_APPROVAL_REQUIRED if irreversible
-browser_act action=replay value=my-flow approve=true
+# ... do the flow (clicks, fills, etc.) ...
+browser_act action=record_stop                          # -> .browser-use/recordings/my-flow.json (secrets redacted)
+browser_act action=compile value=my-flow                # -> .browser-use/macros/my-flow.{ts,md}
+browser_act action=replay value=my-flow                 # pauses with E_APPROVAL_REQUIRED if irreversible
+browser_act action=replay value=my-flow approve=true    # replay with approval
+
+# CLI — same flow over HTTP
+EFFING_USE_URL=http://localhost:3123/mcp effing-use act --action record_start --value my-flow
+# ... do the flow via CLI or MCP ...
+EFFING_USE_URL=http://localhost:3123/mcp effing-use act --action record_stop
+EFFING_USE_URL=http://localhost:3123/mcp effing-use act --action compile --value my-flow
+EFFING_USE_URL=http://localhost:3123/mcp effing-use act --action replay --value my-flow --approve true
 ```
+
+Artifacts: `recordings/*.json` (raw steps), `macros/*.ts` (Playwright `run(page)`), `macros/*.md` (skill doc). Redaction and approval gates are on by default (`RECORD_REDACT=true`).
 
 ## Config
 
