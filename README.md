@@ -71,11 +71,11 @@ Or HTTP: `http://localhost:3123/mcp` (via `bunx effing-use-http` or Docker). Fro
 
 **CLI vs MCP — when to use which:**
 
-| Surface | Command | Needs server? | Best for |
-|---------|---------|---------------|----------|
-| **MCP (stdio)** | `effing-use-stdio` / `bun src/index.ts` | No (spawns own browser) | Single VS Code / Claude Desktop |
-| **MCP (http)** | `effing-use-http` / `bun src/http.ts` | Yes (`:3123`) | Shared across editors, Docker |
-| **CLI** | `effing-use` / `bun src/cli.ts` | Yes (`:3123`, `EFFING_USE_URL`) | Terminal agents, scripts, CI |
+| Surface         | Command                                 | Needs server?                   | Best for                        |
+| --------------- | --------------------------------------- | ------------------------------- | ------------------------------- |
+| **MCP (stdio)** | `effing-use-stdio` / `bun src/index.ts` | No (spawns own browser)         | Single VS Code / Claude Desktop |
+| **MCP (http)**  | `effing-use-http` / `bun src/http.ts`   | Yes (`:3123`)                   | Shared across editors, Docker   |
+| **CLI**         | `effing-use` / `bun src/cli.ts`         | Yes (`:3123`, `EFFING_USE_URL`) | Terminal agents, scripts, CI    |
 
 The CLI is a thin HTTP client over the same engine — `effing-use observe --kind snapshot --mode delta` and `browser_observe kind=snapshot mode=delta` hit the same code. Start the server once (`bun src/http.ts` or `docker compose up`), then use either face.
 

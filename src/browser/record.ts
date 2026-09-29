@@ -97,7 +97,11 @@ export async function saveRecording(
   const dir = join(config.outputDir, "recordings");
   await mkdir(dir, { recursive: true });
   const path = join(dir, `${safe}.json`);
-  const rec: Recording = { name: safe, createdAt: new Date().toISOString(), steps };
+  const rec: Recording = {
+    name: safe,
+    createdAt: new Date().toISOString(),
+    steps,
+  };
   await writeFile(path, JSON.stringify(rec, null, 2), "utf-8");
   return path;
 }

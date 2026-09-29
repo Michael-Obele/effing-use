@@ -96,9 +96,12 @@ export function parseExpect(
   const s = expect.trim();
   let parsed: { kind: string; pattern: string } | null = null;
   if (s.startsWith("url~")) parsed = { kind: "url", pattern: s.slice(4) };
-  else if (s.startsWith("text~")) parsed = { kind: "text", pattern: s.slice(5) };
-  else if (s.startsWith("visible=")) parsed = { kind: "visible", pattern: s.slice(8) };
-  else if (s.startsWith("gone=")) parsed = { kind: "gone", pattern: s.slice(5) };
+  else if (s.startsWith("text~"))
+    parsed = { kind: "text", pattern: s.slice(5) };
+  else if (s.startsWith("visible="))
+    parsed = { kind: "visible", pattern: s.slice(8) };
+  else if (s.startsWith("gone="))
+    parsed = { kind: "gone", pattern: s.slice(5) };
   else return null;
   if (parsed.pattern.length > EXPECT_MAX_PATTERN) return null;
   // Validate regex patterns early for url~/text~

@@ -51,10 +51,14 @@ export async function compileMacro(
     const flag = isIrreversible(s) ? " // requiresApproval" : "";
     switch (s.op) {
       case "click":
-        tsLines.push(`  await page.locator(${JSON.stringify(sel)}).click();${flag}`);
+        tsLines.push(
+          `  await page.locator(${JSON.stringify(sel)}).click();${flag}`,
+        );
         break;
       case "fill":
-        tsLines.push(`  await page.locator(${JSON.stringify(sel)}).fill(${JSON.stringify(val)});${flag}`);
+        tsLines.push(
+          `  await page.locator(${JSON.stringify(sel)}).fill(${JSON.stringify(val)});${flag}`,
+        );
         break;
       case "press":
         tsLines.push(
@@ -63,10 +67,14 @@ export async function compileMacro(
         break;
       case "goto":
       case "open":
-        tsLines.push(`  await page.goto(${JSON.stringify(val || sel)});${flag}`);
+        tsLines.push(
+          `  await page.goto(${JSON.stringify(val || sel)});${flag}`,
+        );
         break;
       default:
-        tsLines.push(`  // ${JSON.stringify(s.op)} ${JSON.stringify(sel)} ${JSON.stringify(val)}${flag}`);
+        tsLines.push(
+          `  // ${JSON.stringify(s.op)} ${JSON.stringify(sel)} ${JSON.stringify(val)}${flag}`,
+        );
         break;
     }
   }
