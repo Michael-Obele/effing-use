@@ -46,16 +46,35 @@ export async function collectEffect(
   const urlAfter = page.url();
   const urlChanged = urlBefore !== urlAfter;
 
-  // domChanged: try to get diff via delta module if available, else simple heuristic
+  // domChanged: line-level diff of body.innerText (50k cap). v0.2 only
+  // compared the first 200 chars, so any below-fold change looked like a no-op
+  // (and fed the failure contract wrong "no DOM change" signals).
   let domChanged: string[] = [];
   try {
     const currentDom = await page.evaluate(
-      () => document.body?.innerText?.slice(0, 200) ?? "",
+      () => document.body?.innerText?.slice(0, 50000) ?? "",
     );
     if (domBeforeHash !== null && currentDom !== domBeforeHash) {
-      domChanged = [
-        currentDom.slice(0, 120).replace(/\s+/g, " ").trim(),
-      ].filter(Boolean);
+      const before = new Set(
+        domBeforeHash
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
+      const after = currentDom
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const afterSet = new Set(after);
+      const changed = after
+        .filter((l) => !before.has(l))
+        .slice(0, 5)
+        .map((l) => l.slice(0, 140));
+      const removed = [...before]
+        .filter((l) => !afterSet.has(l))
+        .slice(0, 3)
+        .map((l) => `- ${l.slice(0, 138)}`);
+      domChanged = [...changed, ...removed].slice(0, 5);
     }
   } catch {
     // ignore

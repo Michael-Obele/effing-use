@@ -44,6 +44,11 @@ export function getBaseline(sessionId: string): string | null {
   return ensureState(sessionId).baseline;
 }
 
+/** URL the current baseline was captured on — forces mode:full after navigation (plan §5.1). */
+export function getBaselineUrl(sessionId: string): string | null {
+  return pageStates.get(key(sessionId))?.baselineUrl ?? null;
+}
+
 export function isDirty(sessionId: string): boolean {
   return ensureState(sessionId).dirty;
 }
@@ -66,8 +71,32 @@ export async function injectDirtyObserver(
       w.__effDirty = false;
       w.__effSid = sid;
       if (w.__effObs) w.__effObs.disconnect();
-      const obs = new MutationObserver(() => {
-        w.__effDirty = true;
+      // Attribute spam that never changes the snapshot's ref lines (class,
+      // style, expand/animation state) used to mark every live SPA permanently
+      // dirty — the cheap "unchanged" fast path never fired. Ignore those;
+      // content changes still arrive via childList/characterData/input/change.
+      const NOISE_ATTRS = [
+        "class",
+        "style",
+        "aria-expanded",
+        "data-state",
+        "data-orientation",
+        "data-scroll-state",
+        "data-highlighted",
+        "data-hovered",
+        "data-dragging",
+        "data-resizing",
+        "data-index",
+      ];
+      const obs = new MutationObserver((muts) => {
+        for (const m of muts) {
+          if (m.type === "attributes") {
+            const name = m.attributeName || "";
+            if (NOISE_ATTRS.indexOf(name) !== -1) continue;
+          }
+          w.__effDirty = true;
+          return;
+        }
       });
       obs.observe(document.documentElement, {
         childList: true,
@@ -127,10 +156,18 @@ export function computeDelta(
   const baseLines = baseline.split("\n");
   const curLines = current.split("\n");
   const baseSet = new Set(baseLines);
+  const curSet = new Set(curLines);
   const changed = curLines.filter((l) => !baseSet.has(l));
+  const removed = baseLines.filter((l) => !curSet.has(l));
+  if (changed.length === 0 && removed.length === 0)
+    return { delta: "", unchanged: true };
   const unchangedCount = curLines.length - changed.length;
-  if (changed.length === 0) return { delta: "", unchanged: true };
   const header = `…${unchangedCount} unchanged lines…`;
-  const delta = [header, ...changed.map((l) => `[changed] ${l}`)].join("\n");
+  const delta = [
+    header,
+    ...changed.map((l) => `[changed] ${l}`),
+    // plan §5.1: removed nodes are reported explicitly
+    ...removed.map((l) => `[removed] ${l}`),
+  ].join("\n");
   return { delta, unchanged: false };
 }

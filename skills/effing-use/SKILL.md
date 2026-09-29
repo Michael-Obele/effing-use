@@ -15,14 +15,14 @@ cost than 21-tool browser servers. `tools/list` is ~3.9KB.
 
 ## The loop (always follow this order)
 
-1. `browser_observe` with `kind: "snapshot"` → get `[eN]` refs. Default is `mode: "delta"` (only changes since last observe); use `mode: "full"` for a complete dump. Use `scope: "<css>"` to observe a subtree.
+1. `browser_observe` with `kind: "snapshot"` → get `[eN]` refs. Default is `mode: "delta"` (`[changed]`/`[removed]` lines since last observe; `unchanged:true` when the page is quiet — navigation automatically forces a fresh `mode: "full"`). Use `mode: "full"` for a complete dump, `scope: "<css>"` to observe a subtree.
 2. `browser_act` to interact (`open`, `click`, `fill`, `type`, `press`, `select`, `check`, `wait`, …). Add `expect: "url~/dashboard"` or `text~/Saved/` for deterministic post-conditions.
-3. `browser_observe` with `kind: "snapshot"` again — delta returns `unchanged:true` if nothing changed, or `[changed]` lines.
+3. `browser_observe` with `kind: "snapshot"` again — delta returns `unchanged:true` if nothing changed, or `[changed]`/`[removed]` lines.
 4. `browser_extract` with `kind: "text" | "table" | "query" | "state"` → scrape or read task state.
 
 Rules:
 
-- Never guess refs. Re-snapshot after every navigation. Stale refs return `E_STALE` or auto-rebind with `rebound:true`.
+- Never guess refs. Re-snapshot after every navigation (refs are page-keyed — a cross-page stale ref returns `E_NOT_FOUND`). On a same-page re-render the engine rebinds only an UNAMBIGUOUS identity match (result carries `rebound:true`); if the fingerprint matches several elements it fails with `E_STALE` instead of guessing — re-observe.
 - Prefer `batch`: one `browser_act` with `steps[]` for fill+press flows (max 20 steps, stops on first error).
 - Large outputs are files under `.browser-use/` (gitignored). Read the path, not the preview.
 - Snapshots are capped at `OUTPUT_MAX_CHARS` (default 4000) with `…[truncated N chars, see file]`.
@@ -37,8 +37,8 @@ Rules:
 `scroll` (`up`/`down`/`top`/`bottom` or a target), `back`/`forward`/`reload`,
 `wait` (`ms:500`, `text:Saved`, or a ref), `dialog_accept`/`dialog_dismiss` (arm before the triggering step),
 `resize` (`1280x800` in `value`), `tab_new`/`tab_select`/`tab_close`, `close`,
-`goal` (deterministic add-todo/search planner, else `E_GOAL_UNCLEAR` + `suggestedSteps`),
-`batch` (needs `steps[]`), `note` (append to task state), `record_start`/`record_stop` (capture flow), `compile` (macro+SKILL.md), `replay` (deterministic replay, needs `approve:true` for irreversible steps).
+`goal` (deterministic add-todo/search planner, else `E_GOAL_UNCLEAR` + `suggestedSteps`; counts as a mutation — subject to the `mustObserve` guard, evidence, and recording),
+`batch` (needs `steps[]`), `note` (append to task state), `record_start`/`record_stop` (capture flow), `compile` (standalone `.ts` + SKILL.md; selectors resolved id → name → ARIA → data-\* → placeholder → text), `replay` (deterministic replay; runs benign steps, halts AT approval-gated steps).
 `expect` mini-language: `url~<regex>` | `text~<regex>` | `visible=<css>` | `gone=<css>` — evaluated in code, returns `E_EXPECT` or `E_BAD_EXPECT`.
 
 **browser_observe** — read-only: `snapshot` (e-refs, `mode: full|delta` default delta, `scope: <css>`), `screenshot` (file path,
@@ -70,8 +70,11 @@ browser_act action=record_start value=my-flow
 # ... do the flow ...
 browser_act action=record_stop
 browser_act action=compile value=my-flow   # -> .browser-use/macros/my-flow.{ts,md}
-browser_act action=replay value=my-flow    # pauses with E_APPROVAL_REQUIRED if irreversible
-browser_act action=replay value=my-flow approve=true
+browser_act action=replay value=my-flow    # runs benign steps, halts AT the first
+                                           # approval-gated step → E_APPROVAL_REQUIRED
+                                           # { step: N (1-indexed), completed: C }
+browser_act action=replay value=my-flow approve=true   # resumes at the gate; the
+                                           # benign prefix is NOT re-run (cursor)
 ```
 
 ## Setup

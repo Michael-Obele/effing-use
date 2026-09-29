@@ -32,8 +32,11 @@ export async function compileMacro(
   const warnings: string[] = [];
   const irreversibleSteps = steps.filter(isIrreversible);
   if (irreversibleSteps.length > 0) {
+    // Steps are human-facing here — 1-indexed, matching the .md step list
     warnings.push(
-      `${irreversibleSteps.length} step(s) require approval: ${irreversibleSteps.map((s) => s.seq).join(", ")}`,
+      `${irreversibleSteps.length} step(s) require approval: steps ${irreversibleSteps
+        .map((s) => s.seq + 1)
+        .join(", ")}`,
     );
   }
 
@@ -49,15 +52,20 @@ export async function compileMacro(
     const sel = selectorFor(s);
     const val = (s.value ?? "").slice(0, 500);
     const flag = isIrreversible(s) ? " // requiresApproval" : "";
+    // Recordings made before stable-selector resolution store session-scoped
+    // e-refs — flag them so nobody runs the .ts standalone expecting it to work.
+    const staleNote = /^e\d+$/.test(sel)
+      ? " /* session-scoped e-ref — not a standalone selector */"
+      : "";
     switch (s.op) {
       case "click":
         tsLines.push(
-          `  await page.locator(${JSON.stringify(sel)}).click();${flag}`,
+          `  await page.locator(${JSON.stringify(sel)}).click();${flag}${staleNote}`,
         );
         break;
       case "fill":
         tsLines.push(
-          `  await page.locator(${JSON.stringify(sel)}).fill(${JSON.stringify(val)});${flag}`,
+          `  await page.locator(${JSON.stringify(sel)}).fill(${JSON.stringify(val)});${flag}${staleNote}`,
         );
         break;
       case "press":

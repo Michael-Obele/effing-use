@@ -3,7 +3,7 @@ import { tool } from "tmcp/utils";
 import * as v from "valibot";
 import { loadConfig } from "../config.js";
 import { getPage, getContext } from "../browser/session.js";
-import { doAct, doBatch, doGoal, type ActAction } from "../browser/engine.js";
+import { doAct, doBatch, type ActAction } from "../browser/engine.js";
 import { EngineError } from "../browser/refs.js";
 
 export const ACT_ACTIONS = [
@@ -100,10 +100,6 @@ export const actTool = defineTool(
         return tool.text(
           JSON.stringify({ ok: true, action, url, title, ...result }),
         );
-      }
-      if (action === "goal") {
-        const result = await doGoal(page, config, value ?? target ?? "", opts);
-        return tool.text(JSON.stringify({ ok: true, action, ...result }));
       }
       const result = await doAct(
         page,

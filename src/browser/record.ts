@@ -119,3 +119,31 @@ export async function loadRecording(
 export function getActiveName(sessionId: string): string | null {
   return activeRecordings.get(sessionId)?.name ?? null;
 }
+
+// ---------------------------------------------------------------- replay cursor
+// Plan §6.3: pause AT an approval-gated step and resume with approve:true —
+// the cursor keeps the benign prefix from running twice (non-idempotent steps).
+const replayCursors = new Map<string, number>();
+
+function cursorKey(sessionId: string, name: string): string {
+  return `${sessionId}:${name}`;
+}
+
+export function getReplayCursor(
+  sessionId: string,
+  name: string,
+): number | undefined {
+  return replayCursors.get(cursorKey(sessionId, name));
+}
+
+export function setReplayCursor(
+  sessionId: string,
+  name: string,
+  step: number,
+): void {
+  replayCursors.set(cursorKey(sessionId, name), step);
+}
+
+export function clearReplayCursor(sessionId: string, name: string): void {
+  replayCursors.delete(cursorKey(sessionId, name));
+}

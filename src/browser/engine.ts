@@ -1,6 +1,6 @@
 import type { Page, BrowserContext } from "playwright";
 import type { Config } from "../config.js";
-import { EngineError, resolveLocator } from "./refs.js";
+import { EngineError, resolveLocator, stableSelectorFor } from "./refs.js";
 import { cap, saveText, stamp } from "./output.js";
 import {
   getConsoleLogs,
@@ -13,6 +13,7 @@ import {
 import { collectEffect, evaluateExpect, parseExpect } from "./evidence.js";
 import {
   getBaseline,
+  getBaselineUrl,
   setBaseline,
   computeDelta,
   injectDirtyObserver,
@@ -28,9 +29,17 @@ import {
   loadRecording,
   startRecording,
   stopRecording,
+  getReplayCursor,
+  setReplayCursor,
+  clearReplayCursor,
 } from "./record.js";
 import { compileMacro, isIrreversible } from "./macro.js";
-import { registerFingerprints, clearRegistry } from "./identity.js";
+import {
+  registerFingerprints,
+  clearRegistry,
+  getFingerprint,
+  extractFingerprints as collectFingerprints,
+} from "./identity.js";
 
 export type ActAction =
   | "open"
@@ -85,6 +94,19 @@ function timeoutOf(config: Config): number {
 async function liteState(page: Page): Promise<{ url: string; title: string }> {
   return { url: page.url(), title: await page.title().catch(() => "") };
 }
+
+/**
+ * SPA navigations commit after the action returns (client router awaits data),
+ * so evidence collected immediately can report urlChanged:false for a click
+ * that DOES navigate (observed: kikitai "Try paste & read" → /read).
+ * Brief settle: one tick, then a second if the URL moved.
+ */
+async function settleSpa(page: Page, action: string): Promise<void> {
+  if (!["click", "dblclick", "press", "goal"].includes(action)) return;
+  const u0 = page.url();
+  await page.waitForTimeout(60);
+  if (page.url() !== u0) await page.waitForTimeout(60);
+}
 function toEngineError(e: unknown, fallbackHint: string): EngineError {
   if (e instanceof EngineError) return e;
   const msg = e instanceof Error ? e.message : String(e);
@@ -116,6 +138,7 @@ const MUTATING = new Set<string>([
   "open",
   "goto",
   "resize",
+  "goal",
   "tab_new",
   "tab_select",
   "tab_close",
@@ -135,6 +158,10 @@ export async function doAct(
 ): Promise<Record<string, unknown>> {
   const timeout = timeoutOf(config);
   const sid = opts?.sessionId ?? "default";
+
+  // Per-action stash must never leak from a previous (possibly failed) act
+  const pageBag = page as unknown as Record<string, unknown>;
+  delete pageBag.__rebound;
 
   // Non-page meta actions (no mustObserve guard, no evidence)
   if (action === "note") {
@@ -209,24 +236,28 @@ export async function doAct(
       );
     });
     const approve = opts?.approve === true;
-    // Check approval gate
-    const needsApproval = (rec.steps as any[]).filter((s: any) =>
-      isIrreversible(s),
-    );
-    if (needsApproval.length > 0 && !approve) {
-      const first = needsApproval[0];
-      return {
-        ok: false,
-        code: "E_APPROVAL_REQUIRED",
-        message: `Step ${first.seq} requires approval (${first.op}).`,
-        hint: "Re-run with approve:true.",
-        step: first.seq,
-        description: `${first.op} ${first.target ?? ""}`,
-      } as any;
-    }
-    // Deterministic replay
+    // Plan §6.3: run benign steps, pause AT each approval-gated step, and keep
+    // a cursor so approve:true resumes here instead of re-running the prefix.
+    const stepsArr = rec.steps as any[];
+    const start = getReplayCursor(sid, name) ?? 0;
     const results: any[] = [];
-    for (const s of rec.steps as any[]) {
+    for (let i = start; i < stepsArr.length; i++) {
+      const s = stepsArr[i];
+      if (isIrreversible(s) && !approve) {
+        setReplayCursor(sid, name, i);
+        const ran = i - start;
+        return {
+          ok: false,
+          code: "E_APPROVAL_REQUIRED",
+          message:
+            `Step ${i + 1} requires approval (${s.op}).` +
+            (ran > 0 ? ` Ran ${ran} prior step(s).` : ""),
+          hint: "Re-run with approve:true to resume from this step.",
+          step: i + 1,
+          completed: results.length,
+          description: `${s.op} ${s.target ?? ""}`,
+        } as any;
+      }
       try {
         const r = await doAct(
           page,
@@ -238,6 +269,7 @@ export async function doAct(
         );
         results.push({ ok: true, seq: s.seq, ...r });
       } catch (e) {
+        clearReplayCursor(sid, name);
         const err = toEngineError(e, "Replay failed.");
         results.push({
           ok: false,
@@ -248,7 +280,14 @@ export async function doAct(
         return { replayed: false, name, failSeq: s.seq, results } as any;
       }
     }
-    return { replayed: true, name, steps: results.length, results } as any;
+    clearReplayCursor(sid, name);
+    return {
+      replayed: true,
+      name,
+      steps: results.length,
+      resumedFrom: start,
+      results,
+    } as any;
   }
 
   // Failure contract guard
@@ -275,8 +314,10 @@ export async function doAct(
   const urlBefore = page.url();
   let domBefore: string | null = null;
   try {
+    // Full innerText (50k cap) — evidence diffs need the whole page, not just
+    // the first 200 chars (v0.2: below-fold changes looked like no-ops).
     domBefore = await page.evaluate(
-      () => document.body?.innerText?.slice(0, 200) ?? "",
+      () => document.body?.innerText?.slice(0, 50000) ?? "",
     );
   } catch {
     domBefore = null;
@@ -579,7 +620,12 @@ export async function doAct(
         result = { closed: true };
         break;
       case "goal":
-        return doGoal(page, config, value ?? target ?? "", opts);
+        // Route through the normal post-action pipeline (guard, evidence,
+        // dirty flag, recording) — v0.2 returned here and skipped all of it.
+        result = {
+          ...(await doGoal(page, config, value ?? target ?? "", opts)),
+        };
+        break;
       case "batch":
         throw new EngineError(
           "E_BAD_INPUT",
@@ -608,6 +654,7 @@ export async function doAct(
   // Post-action: evidence, expect, state, dirty, recording
   let effect: any = undefined;
   if (isMutating(action)) {
+    await settleSpa(page, action);
     effect = await collectEffect(
       page,
       sid,
@@ -657,8 +704,15 @@ export async function doAct(
     `${actionLine} -> ${effect ? JSON.stringify(effect).slice(0, 80) : "ok"}`,
   );
 
-  // Recording capture
+  // Recording capture — resolve a portable selector (id → name → ARIA →
+  // data-* → placeholder → text) so compiled macros don't depend on e-refs.
   if (isRecording(sid) && isMutating(action)) {
+    let resolved = target;
+    if (target) {
+      resolved =
+        (await stableSelectorFor(page, target, sid).catch(() => null)) ??
+        target;
+    }
     captureStep(
       sid,
       {
@@ -666,7 +720,8 @@ export async function doAct(
         target,
         value,
         expect: opts?.expect,
-        resolvedSelector: target,
+        resolvedSelector: resolved,
+        targetFingerprint: target ? getFingerprint(sid, target) : undefined,
       },
       config,
     );
@@ -795,9 +850,22 @@ export async function doObserve(
         | "full"
         | "delta";
       const scope = opts?.scope;
+      // Navigation forces a fresh full baseline (plan §5.1) and needs a settle
+      // beat: SPA routes hydrate after the URL changes — snapshots taken too
+      // early miss the header/nav entirely (observed on kikitai /read).
+      const prevUrl = getBaselineUrl(sessionId);
+      const urlChanged = prevUrl !== null && prevUrl !== page.url();
+      const settleHydration = async () => {
+        if (!urlChanged) return;
+        await page
+          .waitForLoadState("networkidle", { timeout: 1500 })
+          .catch(() => {});
+        await page.waitForTimeout(80);
+      };
       // Scoped snapshot: only within selector
       let yaml: string;
       if (scope) {
+        await settleHydration();
         yaml = await buildSnapshot(page, scope);
         const path = await saveText(config, stamp("snapshot", "yaml"), yaml);
         const { text, truncated } = cap(yaml, config.outputMaxChars);
@@ -815,8 +883,9 @@ export async function doObserve(
       // Delta path
       if (mode === "delta") {
         const baseline = getBaseline(sessionId);
-        // If no baseline, do full
-        if (!baseline) {
+        // No baseline, or the page navigated since the baseline → forced full
+        if (!baseline || urlChanged) {
+          await settleHydration();
           yaml = await buildSnapshot(page);
           setBaseline(sessionId, yaml, page.url());
           await injectDirtyObserver(page, sessionId);
@@ -879,6 +948,7 @@ export async function doObserve(
         };
       }
       // Full mode
+      await settleHydration();
       yaml = await buildSnapshot(page);
       setBaseline(sessionId, yaml, page.url());
       await injectDirtyObserver(page, sessionId);
@@ -960,10 +1030,28 @@ async function buildSnapshot(page: Page, scope?: string): Promise<string> {
     }
     return els.slice(0, 200).map((el) => {
       const tag = el.tagName.toLowerCase();
-      const text = (el.textContent ?? "")
+      let text = (el.textContent ?? "")
         .trim()
         .replace(/\s+/g, " ")
         .slice(0, 80);
+      // Form controls carry no text — surface placeholder/label so refs stop
+      // showing as `input ""`, and mark checked state (real state changes that
+      // delta should surface).
+      const input = el as HTMLInputElement;
+      if (!text) {
+        text = (
+          input.placeholder ||
+          (input.labels && input.labels[0]?.textContent) ||
+          ""
+        )
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 80);
+      }
+      const checked =
+        (tag === "input" || tag === "select") && input.checked
+          ? " [checked]"
+          : "";
       const aria = el.getAttribute("aria-label") ?? "";
       const name = el.getAttribute("name") ?? "";
       const id = el.getAttribute("id") ?? "";
@@ -974,62 +1062,11 @@ async function buildSnapshot(page: Page, scope?: string): Promise<string> {
       ]
         .filter(Boolean)
         .join(" ");
-      return `${tag} "${text}"${extra ? " " + extra : ""}`;
+      return `${tag} "${text}"${extra ? " " + extra : ""}${checked}`;
     });
   }, scope ?? null);
   const lines = items.map((line, i) => `[e${i}] ${line}`);
   return `${header}\n${lines.join("\n") || "(no interactive elements)"}`;
-}
-
-async function collectFingerprints(
-  page: Page,
-): Promise<Array<{ ref: string; fp: import("./identity.js").Fingerprint }>> {
-  const raw = await page
-    .evaluate(() => {
-      const els = [
-        ...document.querySelectorAll(
-          "button, a, input, select, textarea, [role=button], [tabindex]",
-        ),
-      ].slice(0, 200);
-      return els.map((el) => {
-        const text = (el.textContent ?? "")
-          .trim()
-          .replace(/\s+/g, " ")
-          .slice(0, 80);
-        const aria = el.getAttribute("aria-label") ?? "";
-        const role = el.getAttribute("role") ?? el.tagName.toLowerCase();
-        let cur: Element | null = el;
-        const parts: string[] = [];
-        while (cur && parts.length < 6) {
-          parts.push(cur.tagName.toLowerCase());
-          cur = cur.parentElement;
-        }
-        const rect = el.getBoundingClientRect();
-        return {
-          role,
-          accessibleName: aria,
-          text,
-          pathHash: parts.join(">"),
-          box: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-        };
-      });
-    })
-    .catch(() => [] as any[]);
-  return raw.map((r: any, i: number) => ({
-    ref: `e${i}`,
-    fp: {
-      role: r.role || "generic",
-      accessibleName: (r.accessibleName || "").trim().slice(0, 80),
-      textHash: (r.text || "").trim().replace(/\s+/g, " ").slice(0, 80),
-      box: {
-        x: Math.round(r.box.x),
-        y: Math.round(r.box.y),
-        w: Math.round(r.box.w),
-        h: Math.round(r.box.h),
-      },
-      pathHash: r.pathHash || "",
-    },
-  }));
 }
 
 // ---------------------------------------------------------------- extract
