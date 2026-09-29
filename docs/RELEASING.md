@@ -81,7 +81,9 @@ per-repo, so they must be re-added here once.
 
 - Without the secrets: pushes **GHCR only** (logs a notice).
 - First Docker Hub push: **creates the repository** and sets the short
-  description, full description (this repo's README), and topics via the Hub API.
+  description and full description (this repo's README) via the Hub API; every
+  later push re-syncs both. Topics were removed from the Hub API v2 — set them
+  once in the Hub UI (repo page → Topics) if wanted.
 - Every push: syncs description/README; best-effort flips the GHCR package to
   public (if it comes out private: package page → Package settings → Change
   visibility).

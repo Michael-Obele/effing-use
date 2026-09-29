@@ -118,7 +118,7 @@ jobs:
 
       # Create the Docker Hub repo on first push and keep its details in sync:
       # short description above + full description = this repo's README.
-      - name: Ensure Docker Hub repo + description/README/topics
+      - name: Ensure Docker Hub repo + description/README
         if: steps.decide.outputs.push == 'true' && env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         env:
           GH_SHORT: ${{ env.HUB_SHORT_DESC }}
@@ -140,6 +140,7 @@ jobs:
 
           CODE=$(curl -s -o /dev/null -w '%{http_code}' "${AUTH[@]}" \
             "https://hub.docker.com/v2/repositories/${DOCKERHUB_USERNAME}/${IMAGE_NAME}/")
+          echo "repo GET -> $CODE"
           if [ "$CODE" = "404" ]; then
             jq -n --arg ns "$DOCKERHUB_USERNAME" --arg n "$IMAGE_NAME" \
                   --arg d "$GH_SHORT" --rawfile rd README.md \
@@ -156,10 +157,11 @@ jobs:
                 -d @- >/dev/null || true
             echo "Synced description + README (best effort)"
           fi
-          jq -n '{topics:["mcp","browser-automation","playwright","ai-agents","cli","token-efficiency","bun"]}' \
-          | curl -s "${AUTH[@]}" -X PUT \
-              "https://hub.docker.com/v2/repositories/${DOCKERHUB_USERNAME}/${IMAGE_NAME}/topics/" \
-              -d @- >/dev/null || true
+          # Topics were removed from the Hub API v2 (absent from the official
+          # OpenAPI spec at docs.docker.com/reference/api/hub/latest) — the old
+          # PUT /topics/ route 404s, so nothing to set here. Set them once in
+          # the Hub UI (repo page → Topics) if wanted.
+          echo "note: topics not settable via Hub API v2 — set manually in the Hub UI"
 
       # GHCR packages default to private; the OCI source label (set by
       # metadata-action) links the package to this repo so the token may flip it.
