@@ -27,8 +27,8 @@ describe("stamp()", () => {
 });
 
 describe("tool surface", () => {
-  test("exactly 27 act actions", () => {
-    expect(ACT_ACTIONS.length).toBe(27);
+  test("exactly 32 act actions (v2: +note, record_start, record_stop, compile, replay)", () => {
+    expect(ACT_ACTIONS.length).toBe(32);
   });
 });
 

@@ -34,6 +34,11 @@ export const ACT_ACTIONS = [
   "tab_select",
   "tab_close",
   "resize",
+  "note",
+  "record_start",
+  "record_stop",
+  "compile",
+  "replay",
 ] as const;
 
 const StepSchema = v.object({
@@ -53,6 +58,8 @@ export const actTool = defineTool(
       value: v.optional(v.string()),
       sessionId: v.optional(v.string()),
       steps: v.optional(v.array(StepSchema)),
+      expect: v.optional(v.string()),
+      approve: v.optional(v.boolean()),
     }),
     annotations: {
       readOnlyHint: false,
@@ -61,13 +68,13 @@ export const actTool = defineTool(
       openWorldHint: true,
     },
   },
-  async ({ action, target, value, sessionId, steps }) => {
+  async ({ action, target, value, sessionId, steps, expect, approve }) => {
     const config = loadConfig();
     const sid = sessionId ?? "default";
     try {
       const page = await getPage(config, sid);
       const context = await getContext(config, sid);
-      const opts = { context, sessionId: sid };
+      const opts = { context, sessionId: sid, expect, approve };
       if (action === "batch") {
         if (!steps || steps.length === 0)
           return tool.text(

@@ -20,6 +20,7 @@ export const extractTool = defineTool(
         "pdf",
         "trace_start",
         "trace_stop",
+        "state",
       ]),
       selector: v.optional(v.string()),
       mode: v.optional(v.string()),

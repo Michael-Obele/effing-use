@@ -26,6 +26,8 @@ export const observeTool = defineTool(
       limit: v.optional(v.number()),
       sessionId: v.optional(v.string()),
       inline: v.optional(v.boolean()),
+      mode: v.optional(v.picklist(["full", "delta"])),
+      scope: v.optional(v.string()),
     }),
     annotations: {
       readOnlyHint: true,
@@ -34,7 +36,7 @@ export const observeTool = defineTool(
       openWorldHint: false,
     },
   },
-  async ({ kind, target, limit, sessionId }) => {
+  async ({ kind, target, limit, sessionId, mode, scope }) => {
     const config = loadConfig();
     const sid = sessionId ?? "default";
     try {
@@ -43,6 +45,8 @@ export const observeTool = defineTool(
       const result = await doObserve(page, config, kind, target, limit, {
         context,
         sessionId: sid,
+        mode: mode as "full" | "delta" | undefined,
+        scope,
       });
       return tool.text(JSON.stringify({ ok: true, kind, ...result }));
     } catch (e) {

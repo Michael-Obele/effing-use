@@ -11,6 +11,7 @@ const transport = new HttpTransport(server, { path: "/mcp" });
 
 Bun.serve({
   port,
+  hostname: "127.0.0.1",
   // Bun closes idle connections after 10s by default (idleTimeout), and the
   // timer applies even while a response is being streamed. The MCP
   // Streamable-HTTP SSE notification stream sits idle between server->client

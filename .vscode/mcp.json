@@ -10,7 +10,7 @@
     "effing-use (stdio)": {
       "type": "stdio",
       "command": "bunx",
-      "args": ["--package", "effing-use", "effing-use"],
+      "args": ["--package", "effing-use", "effing-use-stdio"],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
@@ -21,7 +21,7 @@
     "effing-use-npm": {
       "type": "stdio",
       "command": "bunx",
-      "args": ["--package", "effing-use@0.1.1", "effing-use"],
+      "args": ["--package", "effing-use@0.1.1", "effing-use-stdio"],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"

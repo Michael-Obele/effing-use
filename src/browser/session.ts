@@ -13,6 +13,7 @@ interface SessionEntry {
   page: Page;
   consoleLogs: Array<{ type: string; text: string; at: string }>;
   networkLogs: Array<{ method: string; url: string; status: number }>;
+  mustObserve: boolean;
 }
 
 const sessions = new Map<string, SessionEntry>();
@@ -48,6 +49,7 @@ export async function getPage(
     page,
     consoleLogs: [],
     networkLogs: [],
+    mustObserve: false,
   };
   page.on("console", (msg) => {
     entry.consoleLogs.push({
@@ -89,6 +91,20 @@ export function getNetworkLogs(
   sessionId = "default",
 ): SessionEntry["networkLogs"] {
   return sessions.get(sessionId)?.networkLogs ?? [];
+}
+
+export function getMustObserve(sessionId = "default"): boolean {
+  return sessions.get(sessionId)?.mustObserve ?? false;
+}
+
+export function setMustObserve(sessionId = "default", v: boolean): void {
+  const s = sessions.get(sessionId);
+  if (s) s.mustObserve = v;
+}
+
+export function clearMustObserve(sessionId = "default"): void {
+  const s = sessions.get(sessionId);
+  if (s) s.mustObserve = false;
 }
 
 export async function closeSession(sessionId = "default"): Promise<void> {
