@@ -57,8 +57,7 @@ export async function resolveLocator(
       if (expected) {
         // Validate against the SAME extractor that registered the snapshot
         const raws = (await page.evaluate(RAW_FP_SCRIPT).catch(() => null)) as
-          | RawFp[]
-          | null;
+          RawFp[] | null;
         const idx = Number(t.slice(1));
         const actual = raws && raws[idx] ? buildFingerprint(raws[idx]) : null;
         if (actual) {
