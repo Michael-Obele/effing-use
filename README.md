@@ -152,6 +152,21 @@ EFFING_USE_URL=http://localhost:3123/mcp effing-use observe --kind snapshot
 
 From npm without global install: `bunx --package effing-use effing-use observe --kind snapshot`.
 
+### Published images (GHCR + Docker Hub)
+
+Every `v*` tag publishes multi-arch images (`linux/amd64`, `linux/arm64`) to both registries:
+
+```bash
+docker pull obele9630/effing-use:latest                # Docker Hub
+docker pull ghcr.io/michael-obele/effing-use:latest    # GHCR
+
+# Chromium needs --init (zombie reaping) and --ipc=host (/dev/shm)
+docker run --rm --init --ipc=host -p 3123:3123 obele9630/effing-use:latest
+curl localhost:3123/healthz                            # {"ok":true,...}
+```
+
+Tags: `latest`, full version (e.g. `0.2.1`), `major.minor`, and `sha-<sha>`. The Docker Hub repo's short description, full description (this README), and topics are synced from CI on every release — see [docs/RELEASING.md](docs/RELEASING.md).
+
 ### Docker
 
 ```bash

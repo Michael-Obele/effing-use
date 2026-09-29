@@ -53,3 +53,41 @@ tag doesn't match `package.json`'s version.
   `git+https://github.com/Michael-Obele/effing-use.git`).
 - GitHub-hosted runner + public repo + public package are required for
   provenance.
+
+## Docker images
+
+`.github/workflows/docker.yml` runs on the same `v*` tags (plus `master`/PR
+build-only runs and `workflow_dispatch`):
+
+- **Tag / dispatch** → multi-arch (`linux/amd64` + `linux/arm64`) push to
+  `ghcr.io/michael-obele/effing-use` **and** `docker.io/<user>/effing-use`,
+  tagged `latest`, full version, `major.minor`, `sha-*`.
+- **`master` / PR** → amd64 build-only (validates the Dockerfile, no push).
+
+### One-time setup
+
+Repo → **Settings → Secrets and variables → Actions** → New repository secret:
+
+1. `DOCKERHUB_USERNAME` — your Docker Hub username (the namespace, e.g.
+   `obele9630`).
+2. `DOCKERHUB_TOKEN` — Docker Hub personal access token: hub.docker.com →
+   Account settings → Personal access tokens → Generate (**Read & Write**).
+   Never use your account password.
+
+The same pair already exists in `Michael-Obele/tomoshibi` — GitHub secrets are
+per-repo, so they must be re-added here once.
+
+### What the workflow does for you
+
+- Without the secrets: pushes **GHCR only** (logs a notice).
+- First Docker Hub push: **creates the repository** and sets the short
+  description, full description (this repo's README), and topics via the Hub API.
+- Every push: syncs description/README; best-effort flips the GHCR package to
+  public (if it comes out private: package page → Package settings → Change
+  visibility).
+
+### Limits
+
+Docker Hub Personal (free): **unlimited public repos**, 200 pulls/6h
+authenticated. This image is large (Playwright base ≈ 3.7 GB per arch) — that's
+fine for public storage, just expect long first pushes.
