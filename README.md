@@ -1,14 +1,14 @@
-# effing-use — stop paying 19.5 KB every session for browser control
+# effing-use — stop paying 20 KB every session for browser control
 
 [![npm version](https://img.shields.io/npm/v/effing-use)](https://www.npmjs.com/package/effing-use) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Bun](https://img.shields.io/badge/runtime-Bun%201.4%2B-black?logo=bun)](https://bun.sh)
 
-Full Chromium automation in **3 tools, 3.9 KB**. Same pages, same clicks, same scrapes — without the 24-tool handshake eating your context window before you load a page.
+Full Chromium automation in **3 tools, 4.0 KB**. Same pages, same clicks, same scrapes — without the 25-tool handshake eating your context window before you load a page.
 
-**Measured, not marketed:** `tools/list` is **3,913 bytes** here vs **19,517 bytes** for `@playwright/mcp@latest` (~5x smaller, ~15.6 KB saved every session). Local ops stay in milliseconds — snapshot ~15 ms, extract ~50 ms, batch ~65 ms, screenshot ~60–190 ms. Page loads still cost seconds (network, not us). Full numbers in [`docs/COMPARISON.md`](docs/COMPARISON.md).
+**Measured, not marketed:** `tools/list` is **3,955 bytes** here vs **20,286 bytes** for `@playwright/mcp@latest` — **5.1× smaller**, ~16.3 KB saved every session. Re-observing after an action costs **70 tokens** instead of **3,857** (Playwright has no delta mode). End-to-end on the same task: **10.1× cheaper**. Full method + numbers in [`docs/FINDINGS.md`](docs/FINDINGS.md).
 
 ## Install (Bun-only)
 
-Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.2.1](https://www.npmjs.com/package/effing-use)):
+Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.3.0](https://www.npmjs.com/package/effing-use)):
 
 ```bash
 # No install needed — bunx fetches from npm on first run
@@ -182,6 +182,42 @@ docker rm -f effing-use-computer-use-1 && docker compose up -d
 
 Compose details: `restart: unless-stopped`, `init: true` + `ipc: host` (Playwright flags), `.browser-use/` bind-mounted, `EFFING_PORT` overrides host port (`EFFING_PORT=4000 docker compose up -d`).
 
+### Opening a local dev server (`http://localhost:5175`) from the container
+
+A dev server started with plain `vite dev` / `next dev` binds **127.0.0.1 only**. Inside
+Docker Desktop that is unreachable — the container runs in a LinuxKit VM with its own
+network namespace — so three obvious fixes all fail:
+
+| Attempt                                 | Result                                                |
+| --------------------------------------- | ----------------------------------------------------- |
+| `open http://localhost:5175`            | `ERR_CONNECTION_REFUSED` (container's own loopback)   |
+| `open http://host.docker.internal:5175` | `403 Blocked request` — Vite ≥6 `server.allowedHosts` |
+| `docker run --network host`             | maps to the **VM**, not your machine — still refused  |
+
+**You do not need to edit the app's `vite.config.ts`.** `src/browser/bridge.ts` splices
+the container's loopback to the host gateway and rewrites the HTTP `Host:` header back
+to `localhost`, so the dev server's host allow-list is satisfied. The model still types
+the plain URL:
+
+```json
+{
+  "ok": true,
+  "action": "open",
+  "url": "http://localhost:5175/",
+  "title": "Sepia — Memory Server for AI Agents",
+  "bridgedVia": "host.docker.internal"
+}
+```
+
+- Engaged **only** when a loopback URL is requested and the direct dial fails, so a
+  native `bun src/http.ts` run pays nothing (one extra probe).
+- `EFFING_BRIDGE=0` disables it, `EFFING_BRIDGE_HOST` overrides the gateway.
+- If no gateway answers, you get `E_LOCALHOST_UNREACHABLE` with the fix in `hint`
+  (add `extra_hosts: ["host.docker.internal:host-gateway"]`, or run natively) instead of
+  a bare connection error.
+- `compose.yaml` ships the `extra_hosts` entry (required on Linux engines; a no-op on
+  Docker Desktop).
+
 ## Why agents prefer 3 tools
 
 - 🪶 **Tiny handshake, full surface** — `browser_act` (32 actions), `browser_observe` (8 kinds + `mode`/`scope`), `browser_extract` (8 kinds incl. `state`). No schema bloat, no guessing which of 24 tools to call.
@@ -235,16 +271,44 @@ CLI equivalent: `effing-use observe --kind snapshot --mode delta` / `effing-use 
 - `browser_observe` — snapshot (e-refs, `mode: full|delta` default delta, `scope`), screenshot (path), url, title, console (last N), network (method/url/status ring), tabs, focused
 - `browser_extract` — text, html, table (≤100 rows JSON), query (text|href|json), pdf, trace_start/stop, `state`
 
-Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIMEOUT | E_NO_PAGE | E_BAD_INPUT | E_GOAL_UNCLEAR | E_STALE | E_EXPECT | E_BAD_EXPECT | E_MUST_OBSERVE | E_APPROVAL_REQUIRED` — never a stack trace.
+Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIMEOUT | E_NO_PAGE | E_BAD_INPUT | E_GOAL_UNCLEAR | E_STALE | E_EXPECT | E_BAD_EXPECT | E_MUST_OBSERVE | E_APPROVAL_REQUIRED | E_LOCALHOST_UNREACHABLE` — never a stack trace.
 
 ## effing-use vs Playwright MCP
 
-|                  | effing-use                      | Playwright MCP                                             |
-| ---------------- | ------------------------------- | ---------------------------------------------------------- |
-| `tools/list`     | **3,913 bytes / 3 tools**       | **19,517 bytes / 24 tools**                                |
-| Snapshot         | capped 4 KB preview + full file | full accessibility tree                                    |
-| Screenshots/PDFs | file paths                      | inline or output dir                                       |
-| Browsers         | Chromium (headless in Docker)   | Chromium, Firefox, WebKit, Edge + vision/pdf/devtools caps |
+Measured with `bench/bench.mjs` against the **same** local app
+(`http://localhost:5175`), same MCP Streamable-HTTP transport, same Chromium
+(`bunx @playwright/mcp@latest --port 8931`). Reproduce:
+
+```bash
+bunx @playwright/mcp@latest install-browser chrome-for-testing
+bunx @playwright/mcp@latest --port 8931 --host 127.0.0.1 --browser chromium --headless &
+PLAYWRIGHT_MCP_URL=http://localhost:8931/mcp EFFING_USE_URL=http://localhost:3123/mcp \
+  bun bench/bench.mjs --target http://localhost:5175/
+```
+
+> Use `http://localhost:8931` — Playwright MCP has its own DNS-rebinding guard and
+> answers `403 Access is only allowed at localhost:8931` for `127.0.0.1`.
+
+|                  | effing-use                                      | Playwright MCP                    |
+| ---------------- | ----------------------------------------------- | --------------------------------- |
+| `tools/list`     | **3,955 B / 3 tools** (~989t)                   | **20,286 B / 25 tools** (~5,072t) |
+| Snapshot         | capped 4 KB preview + file                      | full accessibility tree           |
+| Re-observe (2nd) | `unchanged:true` — **70 t**                     | full tree again — **3,857 t**     |
+| Whole flow       | **~300 t / 4 calls**                            | **~7,775 t / 3 calls**            |
+| End-to-end       | **~1,277 t**                                    | **~12,847 t**                     |
+| **Verdict**      | **10.1× cheaper** (5.2× schema, **25.9× flow**) | —                                 |
+
+The flow gap is the point: Playwright MCP has no delta mode, so a second identical
+`snapshot` costs another 3,857 tokens. effing-use's second `observe` is 70.
+
+Plan gates (effing-use-v2 §10), re-measured 2026-09-29:
+
+| Gate                                 | Target   | Measured                        |
+| ------------------------------------ | -------- | ------------------------------- |
+| §10.2 tools / schema size            | 3 / <10K | 3 / 3,955 B                     |
+| §10.6 TodoMVC add-todo delta vs full | < 25 %   | **24.3 %** (content-to-content) |
+| §10.6 clean-page observe             | ~60 t    | **42 t**                        |
+| §10.7 record → compile → replay      | 0 LLM    | 0 LLM, `expect: pass`           |
 
 Need Firefox/WebKit, device emulation, or persistent profiles? Use Playwright MCP. Need context budget for Chromium work? Stay here. Full breakdown in [`docs/COMPARISON.md`](docs/COMPARISON.md).
 
@@ -279,5 +343,18 @@ Agent skill: `skills/effing-use/SKILL.md` (skills.sh-ready).
 
 ```bash
 bunx tsc --noEmit   # 0 errors
-bun test            # 6 pass
+bun test            # 34 pass
+bunx prettier --check src/ tests/ bench/ compose.yaml
 ```
+
+Live regression (Docker, `localhost:5175` bridged + TodoMVC):
+
+```bash
+docker compose up -d --build
+bunx tsc --noEmit && bun test
+MCP_URL=http://localhost:3123/mcp bun /tmp/mcp-call.mjs browser_act \
+  '{"action":"open","value":"http://localhost:5175/","sessionId":"check"}'
+```
+
+`bench/bench.mjs` is the reproducible comparison against Playwright MCP described in
+[effing-use vs Playwright MCP](#effing-use-vs-playwright-mcp).

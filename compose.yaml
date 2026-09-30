@@ -26,6 +26,17 @@ services:
       OUTPUT_DIR: /app/.browser-use
       OUTPUT_MAX_CHARS: "4000"
       ALLOW_EVAL: "false"
+      # Loopback bridge (src/browser/bridge.ts). Lets the container open
+      # http://localhost:<port> for a dev server bound to 127.0.0.1 on the
+      # host, WITHOUT editing the app's vite.config.ts. The bridge splices
+      # container loopback -> host.docker.internal and rewrites the HTTP
+      # Host: header back to localhost so Vite >=6 `server.allowedHosts`
+      # accepts it. Set to "0" to disable, or override the gateway host.
+      EFFING_BRIDGE: "1"
+    extra_hosts:
+      # Required on Linux engines (no built-in host.docker.internal). On
+      # Docker Desktop this is a no-op — the name already resolves.
+      - "host.docker.internal:host-gateway"
     volumes:
       # Persist snapshots / screenshots / PDFs on the host for inspection
       - ./.browser-use:/app/.browser-use

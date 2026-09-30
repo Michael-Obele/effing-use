@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Config } from "../config.js";
 import type { RecordStep } from "./record.js";
+import { macroLocator } from "./refs.js";
 
 const IRREVERSIBLE = /submit|send|buy|pay|delete|remove|publish|post|confirm/i;
 
@@ -52,20 +53,35 @@ export async function compileMacro(
     const sel = selectorFor(s);
     const val = (s.value ?? "").slice(0, 500);
     const flag = isIrreversible(s) ? " // requiresApproval" : "";
-    // Recordings made before stable-selector resolution store session-scoped
-    // e-refs — flag them so nobody runs the .ts standalone expecting it to work.
-    const staleNote = /^e\d+$/.test(sel)
-      ? " /* session-scoped e-ref — not a standalone selector */"
-      : "";
+    // Plan §6.2: macros must run standalone. An e-ref is session-scoped, so
+    // it is never emitted as a live locator — an unresolved step becomes a
+    // comment (and a warning) rather than a `page.locator("e2")` that throws.
+    const unresolved = /^e\d+$/i.test(sel);
+    if (unresolved) {
+      warnings.push(
+        `step ${s.seq + 1}: no stable selector for "${s.target ?? ""}" — emitted as a comment, add data-testid or a unique label and re-record`,
+      );
+    }
+    const loc = macroLocator(sel);
+    // An unresolved step must not break the file's syntax — emit a comment
+    // line the user can act on, not `await /* ... */.click()`.
+    if (unresolved) {
+      tsLines.push(
+        `  // SKIPPED step ${s.seq + 1}: ${s.op} "${s.target ?? ""}" has no stable selector (add a data-testid or a unique label, then re-record).`,
+      );
+      continue;
+    }
+    const staleNote =
+      sel.startsWith("role=") || sel.startsWith("text=")
+        ? " /* role+name selector: re-resolves at replay time */"
+        : "";
     switch (s.op) {
       case "click":
-        tsLines.push(
-          `  await page.locator(${JSON.stringify(sel)}).click();${flag}${staleNote}`,
-        );
+        tsLines.push(`  await ${loc}.click();${flag}${staleNote}`);
         break;
       case "fill":
         tsLines.push(
-          `  await page.locator(${JSON.stringify(sel)}).fill(${JSON.stringify(val)});${flag}${staleNote}`,
+          `  await ${loc}.fill(${JSON.stringify(val)});${flag}${staleNote}`,
         );
         break;
       case "press":

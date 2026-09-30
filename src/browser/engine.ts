@@ -40,6 +40,7 @@ import {
   getFingerprint,
   extractFingerprints as collectFingerprints,
 } from "./identity.js";
+import { ensureLoopbackBridge, inContainer } from "./bridge.js";
 
 export type ActAction =
   | "open"
@@ -93,6 +94,59 @@ function timeoutOf(config: Config): number {
 }
 async function liteState(page: Page): Promise<{ url: string; title: string }> {
   return { url: page.url(), title: await page.title().catch(() => "") };
+}
+
+/**
+ * Navigate, transparently bridging loopback URLs when containerised.
+ *
+ * A dev server bound to 127.0.0.1 is unreachable from a Docker Desktop VM
+ * (separate netns) and Vite >=6 rejects the `host.docker.internal` Host header
+ * with 403. The bridge makes `http://localhost:5175` work verbatim — the app
+ * needs NO vite.config change (see src/browser/bridge.ts). On a native run the
+ * direct dial succeeds first and this is a single extra probe, no bridge.
+ */
+async function navigate(
+  page: Page,
+  rawUrl: string,
+  timeout: number,
+  config: Config,
+): Promise<void> {
+  let url = rawUrl;
+  let port: number | null = null;
+  let loopback = false;
+  try {
+    const u = new URL(rawUrl);
+    loopback = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(u.hostname);
+    if (loopback && (u.protocol === "http:" || u.protocol === "https:"))
+      port = Number(u.port || (u.protocol === "https:" ? 443 : 80));
+  } catch {
+    /* not a URL — let goto produce the real parse error */
+  }
+
+  if (port && loopback && process.env.EFFING_NO_BRIDGE !== "1") {
+    const br = await ensureLoopbackBridge(port, {
+      disabled: process.env.EFFING_BRIDGE === "0",
+      host: process.env.EFFING_BRIDGE_HOST || undefined,
+    });
+    if (br.bridged) {
+      (page as unknown as Record<string, unknown>).__bridgedVia = br.via;
+    } else if (
+      br.reason &&
+      br.reason !== "already-reachable" &&
+      inContainer()
+    ) {
+      // Surface an actionable error instead of a bare ERR_CONNECTION_REFUSED.
+      throw new EngineError(
+        "E_LOCALHOST_UNREACHABLE",
+        `Cannot reach ${rawUrl} from inside the container: the dev server binds 127.0.0.1 only and no host gateway answered on port ${port} (${br.reason}).`,
+        inContainer()
+          ? 'Add `extra_hosts: ["host.docker.internal:host-gateway"]` to the compose service, or run the server natively (`bun src/http.ts`), or open the app on a host that is published (0.0.0.0).'
+          : "Start the dev server so it accepts connections from this machine.",
+        { url: rawUrl, port },
+      );
+    }
+  }
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout });
 }
 
 /**
@@ -259,11 +313,19 @@ export async function doAct(
         } as any;
       }
       try {
+        // Replay the RESOLVED selector, not the raw e-ref. An e-ref is
+        // positional within one snapshot; on replay the page is in a
+        // different state, so `e2` hits an arbitrary element (measured: a
+        // recorded /pricing click silently no-op'd with E_EXPECT). The
+        // compiler already stores a standalone selector; use it, falling
+        // back to the recorded target only when none was resolved.
+        const replayTarget =
+          (s.resolvedSelector as string | undefined) || s.target;
         const r = await doAct(
           page,
           config,
           s.op as ActAction,
-          s.target,
+          replayTarget,
           s.value === "«redacted»" ? undefined : s.value,
           { ...opts, expect: s.expect },
         );
@@ -325,6 +387,18 @@ export async function doAct(
   const consoleBefore = getConsoleLogs(sid).length;
   const networkBefore = getNetworkLogs(sid).length;
 
+  // Recording selector capture — resolve the portable selector (plan §6.2
+  // tier order: id → name → ARIA → data-* → placeholder → text → role+name)
+  // BEFORE the action runs. A click that navigates replaces the DOM, so
+  // resolving afterwards looked up the old e-ref on the NEW page and returned
+  // null, emitting a broken `page.locator("e2")` into the compiled macro.
+  let preResolved: string | undefined;
+  if (target && isRecording(sid) && isMutating(action)) {
+    preResolved =
+      (await stableSelectorFor(page, target, sid).catch(() => null)) ??
+      undefined;
+  }
+
   let result: Record<string, unknown>;
   let isTimeout = false;
   try {
@@ -338,7 +412,7 @@ export async function doAct(
             "Missing URL.",
             "Pass the URL in value (or target).",
           );
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+        await navigate(page, url, timeout, config);
         result = { ...(await liteState(page)) };
         break;
       }
@@ -685,6 +759,14 @@ export async function doAct(
       (result as any).effect = effect;
       if (effect.mustObserve) (result as any).mustObserve = true;
     }
+    // Surface the loopback bridge once per navigation so the model (and the
+    // user debugging "why can't it open localhost") can see the hop.
+    const bridgedVia = (page as unknown as Record<string, unknown>)
+      .__bridgedVia;
+    if (bridgedVia) {
+      (result as any).bridgedVia = bridgedVia;
+      delete (page as unknown as Record<string, unknown>).__bridgedVia;
+    }
     // Mark dirty for delta
     ensureDeltaState(sid).dirty = true;
     try {
@@ -704,15 +786,11 @@ export async function doAct(
     `${actionLine} -> ${effect ? JSON.stringify(effect).slice(0, 80) : "ok"}`,
   );
 
-  // Recording capture — resolve a portable selector (id → name → ARIA →
-  // data-* → placeholder → text) so compiled macros don't depend on e-refs.
+  // Recording capture — uses the selector resolved BEFORE the action, so a
+  // navigating click still records a working standalone macro step.
+  // Keyless ops (press/type/scroll/wait) have no target but ARE part of the
+  // flow — they used to be dropped, producing empty macros.
   if (isRecording(sid) && isMutating(action)) {
-    let resolved = target;
-    if (target) {
-      resolved =
-        (await stableSelectorFor(page, target, sid).catch(() => null)) ??
-        target;
-    }
     captureStep(
       sid,
       {
@@ -720,7 +798,7 @@ export async function doAct(
         target,
         value,
         expect: opts?.expect,
-        resolvedSelector: resolved,
+        resolvedSelector: preResolved ?? target,
         targetFingerprint: target ? getFingerprint(sid, target) : undefined,
       },
       config,
@@ -933,17 +1011,19 @@ export async function doObserve(
         await injectDirtyObserver(page, sessionId);
         const fps = await collectFingerprints(page);
         registerFingerprints(sessionId, fps);
-        const path = await saveText(config, stamp("snapshot", "yaml"), yaml);
         const { text: dtext, truncated } = cap(delta, config.outputMaxChars);
         clearMustObserve(sessionId);
+        // A delta does NOT write a snapshot file: the model already has the
+        // previous full snapshot, and `path` was being emitted twice (as both
+        // `path` and `fullPath`) for the same string. Only a full observe
+        // persists to disk. This is the plan's "scope, never compress" rule:
+        // the in-context payload is smaller by construction.
         return {
-          path,
           delta: dtext,
           truncated,
           url: page.url(),
           title: await page.title().catch(() => ""),
           mode: "delta",
-          fullPath: path,
         };
       }
       // Full mode

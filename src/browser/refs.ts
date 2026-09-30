@@ -242,18 +242,91 @@ export async function stableSelectorFor(
           const a = av(text);
           if (a) out.push("text=" + a);
         }
+        // 7. ARIA role + accessible name (plan §6.2 selector tier 3).
+        // Last resort: ambiguous text (two "Pricing" links) is NOT unique, so
+        // every candidate above fails `uniq` and the caller used to fall back
+        // to the raw e-ref — producing a macro that cannot run standalone.
+        // A role+name locator is unique *enough*: it re-resolves at replay time
+        // and `.first()` pins DOM order deterministically.
+        //
+        // NOTE: this whole callback is serialised into the page, so it can
+        // only use its own locals. Calling the module-level `implicitRole()`
+        // from here threw `ReferenceError: implicitRole is not defined`,
+        // which the `.catch` swallowed into an empty candidate list — the
+        // selector silently degraded to the raw e-ref.
+        const IMPLICIT_ROLE: Record<string, string> = {
+          a: "link",
+          button: "button",
+          input: "textbox",
+          select: "combobox",
+          textarea: "textbox",
+        };
+        const role = el.getAttribute("role") || IMPLICIT_ROLE[tag] || "";
+        const accName = aria || text;
+        if (role && accName) {
+          const a = av(accName.slice(0, 60));
+          if (a) out.push(`role=${role}[name=${a}]`);
+        }
         return out;
       })
-      .catch(() => [] as string[]);
+      .catch((e: unknown) => {
+        // A serialised page callback that references a module-scope helper
+        // throws ReferenceError, and the old `.catch(() => [])` swallowed it
+        // so the caller silently degraded to the raw e-ref. Surface it.
+        if (process.env.EFFING_DEBUG) {
+          console.error(
+            "[effing-use] stableSelectorFor evaluate failed:",
+            e instanceof Error ? e.message : String(e),
+          );
+        }
+        return [] as string[];
+      });
     for (const c of cands) {
-      const n = await page
-        .locator(c)
-        .count()
-        .catch(() => 0);
-      if (n === 1) return c;
+      // `text=` and `role=` are Playwright engine selectors, not CSS — count
+      // them with the engine (strict mode would throw, so use a raw count).
+      const n = await countCandidate(page, c);
+      if (n >= 1) return c;
     }
     return null;
   } catch {
     return null;
   }
+}
+
+async function countCandidate(page: Page, c: string): Promise<number> {
+  if (c.startsWith("role=")) {
+    const m = /^role=([a-z]+)\[name="([\s\S]*)"\]$/.exec(c);
+    if (m)
+      return page
+        .getByRole(m[1] as any, { name: m[2], exact: true })
+        .count()
+        .catch(() => 0);
+  }
+  if (c.startsWith("text=")) {
+    return page
+      .locator(c)
+      .count()
+      .catch(() => 0);
+  }
+  return page
+    .locator(c)
+    .count()
+    .catch(() => 0);
+}
+
+/**
+ * Compile a recorded selector into a Playwright expression that works
+ * OUTSIDE a session (no e-refs). `role=` / `text=` engine selectors become
+ * real Playwright calls; an unresolved e-ref becomes a comment rather than a
+ * locator that throws.
+ */
+export function macroLocator(sel: string): string {
+  const m = /^role=([a-z]+)\[name="([\s\S]*)"\]$/.exec(sel);
+  if (m)
+    return `page.getByRole(${JSON.stringify(m[1])}, { name: ${JSON.stringify(m[2])}, exact: true }).first()`;
+  if (sel.startsWith("text="))
+    return `page.locator(${JSON.stringify(sel)}).first()`;
+  if (/^e\d+$/i.test(sel))
+    return `/* UNRESOLVED: session e-ref "${sel}" has no stable selector — re-record with a unique label or add a data-testid */`;
+  return `page.locator(${JSON.stringify(sel)})`;
 }
