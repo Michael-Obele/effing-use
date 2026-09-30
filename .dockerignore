@@ -13,3 +13,4 @@ build
 .env
 Dockerfile
 .dockerignore
+.playwright-mcp

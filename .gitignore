@@ -10,3 +10,4 @@ build/
 
 # plan folder (local planning docs, not committed)
 **/plan/
+.playwright-mcp/
