@@ -42,25 +42,23 @@ The first benchmark run reported a flattering **4.0×** win — because it was w
 
 `@playwright/mcp` returns ~220 bytes of prose plus a path:
 
-````
 ### Ran Playwright code
+
 ```js
-await page.goto('https://example.com/');
-````
+await page.goto("https://example.com/");
+```
 
 - [Snapshot](.playwright-mcp/page-2026-09-30T08-18-58-733Z.yml)
-
-````
 
 The model cannot act on that. It must **read the referenced file**, and the file
 is 15 KB–61 KB. Counting only the inline response understates the real cost by
 roughly **2×** and makes a losing tool look like a winner.
 
-| Playwright result | inline | file on disk | real total |
-|---|---:|---:|---:|
-| `example.com` navigate | 469 tok | 391 B | 860 tok |
-| GitHub issues navigate | 312 tok | 16,179 B | 4,123 tok |
-| news.ycombinator observe | — | — | 35,739 tok |
+| Playwright result        |  inline | file on disk | real total |
+| ------------------------ | ------: | -----------: | ---------: |
+| `example.com` navigate   | 469 tok |        391 B |    860 tok |
+| GitHub issues navigate   | 312 tok |     16,179 B |  4,123 tok |
+| news.ycombinator observe |       — |            — | 35,739 tok |
 
 `bench/live-bench.mjs` now resolves those paths and counts the files. **All numbers
 in this document use the honest figure.**
@@ -72,21 +70,21 @@ in this document use the honest figure.**
 
 ## 3. Per-site results (real websites)
 
-| Site | effing | pw inline | pw + file | ratio | eff ms | pw ms |
-|---|---:|---:|---:|---:|---:|---:|
-| wikipedia (dense text, huge DOM) | 1,297 | 15,803 | 31,500 | **24.3×** | 4,588 | 4,830 |
-| news.ycombinator (many small links) | 1,330 | 23,862 | 35,739 | **26.9×** | 3,831 | 6,029 |
-| example.com (minimal baseline) | 382 | 469 | 860 | 2.3× | 2,109 | 1,983 |
-| todomvc (fill + press + observe) | 421 | 867 | 1,580 | 3.8× | 4,249 | 2,090 |
-| duckduckgo (heavy page) | 484 | 1,687 | 3,245 | 6.7× | 16,873 | 14,932 |
-| react.dev (nav-heavy docs) | 1,225 | 11,872 | 23,573 | **19.2×** | 7,642 | 5,846 |
-| httpbin (plain HTML form) | 308 | 472 | 873 | 2.8× | 1,951 | 2,161 |
-| github issues (very dense) | 1,267 | 4,161 | 8,207 | 6.5× | 11,713 | 38,115 |
-| **TOTAL** | **6,714** | **59,199** | **105,577** | **15.7×** | **52,956** | **75,986** |
+| Site                                |    effing |  pw inline |   pw + file |     ratio |     eff ms |      pw ms |
+| ----------------------------------- | --------: | ---------: | ----------: | --------: | ---------: | ---------: |
+| wikipedia (dense text, huge DOM)    |     1,297 |     15,803 |      31,500 | **24.3×** |      4,588 |      4,830 |
+| news.ycombinator (many small links) |     1,330 |     23,862 |      35,739 | **26.9×** |      3,831 |      6,029 |
+| example.com (minimal baseline)      |       382 |        469 |         860 |      2.3× |      2,109 |      1,983 |
+| todomvc (fill + press + observe)    |       421 |        867 |       1,580 |      3.8× |      4,249 |      2,090 |
+| duckduckgo (heavy page)             |       484 |      1,687 |       3,245 |      6.7× |     16,873 |     14,932 |
+| react.dev (nav-heavy docs)          |     1,225 |     11,872 |      23,573 | **19.2×** |      7,642 |      5,846 |
+| httpbin (plain HTML form)           |       308 |        472 |         873 |      2.8× |      1,951 |      2,161 |
+| github issues (very dense)          |     1,267 |      4,161 |       8,207 |      6.5× |     11,713 |     38,115 |
+| **TOTAL**                           | **6,714** | **59,199** | **105,577** | **15.7×** | **52,956** | **75,986** |
 
 **Read the shape of this table, not just the total.** The ratio is highest on
-*content-dense* pages (Wikipedia 24×, Hacker News 27×) and lowest on
-*structurally simple* ones (example.com 2.3×). That is the correct behaviour for a
+_content-dense_ pages (Wikipedia 24×, Hacker News 27×) and lowest on
+_structurally simple_ ones (example.com 2.3×). That is the correct behaviour for a
 delta-based design: the win scales with how much of the page you did **not** need
 to re-read. On a page with three links there is simply nothing to save.
 
@@ -106,14 +104,14 @@ effing-use reads the DOM. Canvas-rendered UIs, remote desktops, Citrix sessions 
 Electron apps with custom-painted controls are **invisible** to it. This is not a bug
 to be patched later; it is the cost of the token saving.
 
-| Channel | Strength | Fails on |
-|---|---|---|
-| Screenshot + pixel coords | Canvas apps, remote desktops, anything the DOM doesn't expose | Anti-aliasing/scaling; localisation errors compound; toast overlays |
-| **Accessibility tree (effing-use)** | Compact, semantic, cheap; survives restyling | Canvas, shadow DOM, custom controls with no ARIA, rich-text editors |
-| Hybrid | Recovers when one channel fails | Two failure modes to debug; higher latency and token cost |
+| Channel                             | Strength                                                      | Fails on                                                            |
+| ----------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Screenshot + pixel coords           | Canvas apps, remote desktops, anything the DOM doesn't expose | Anti-aliasing/scaling; localisation errors compound; toast overlays |
+| **Accessibility tree (effing-use)** | Compact, semantic, cheap; survives restyling                  | Canvas, shadow DOM, custom controls with no ARIA, rich-text editors |
+| Hybrid                              | Recovers when one channel fails                               | Two failure modes to debug; higher latency and token cost           |
 
-*Sources: [What Computer Use Agents See (2026)](https://www.bestaiweb.ai/dom-trees-vs-screenshots-prerequisites-and-technical-limits-of-computer-use-agents-in-2026/),
-[Assrt — a11y tree vs screenshots](https://assrt.ai/alternative/accessibility-tree-vs-screenshot-e2e-testing).*
+_Sources: [What Computer Use Agents See (2026)](https://www.bestaiweb.ai/dom-trees-vs-screenshots-prerequisites-and-technical-limits-of-computer-use-agents-in-2026/),
+[Assrt — a11y tree vs screenshots](https://assrt.ai/alternative/accessibility-tree-vs-screenshot-e2e-testing)._
 
 **Mitigation now shipped:** a snapshot with zero interactive elements returns
 `looksEmpty: true` plus an `emptyHint` telling the model the UI may be
@@ -136,7 +134,7 @@ top and every later ref shifts.
 effing-use mitigates this with the fingerprint registry (`identity.ts`): on a
 mismatch it rebinds only on an **unambiguous** identity match, and otherwise fails
 with `E_STALE` rather than clicking the wrong element. That is the safe behaviour,
-but it is still *more round trips* than an identity-stable ref scheme (Vercel's
+but it is still _more round trips_ than an identity-stable ref scheme (Vercel's
 `agent-browser` never recycles IDs, so a ref survives unless the element itself is
 replaced).
 
@@ -171,7 +169,7 @@ attributes**, not the platform accessibility tree. The README wording should say
 ### 4.6 It needs one extra MCP round trip to switch modes
 
 Playwright exposes `browser_*` tools the model can pick per call. effing-use is
-3 tools, so a change of *mode* (delta → full, act → extract) is a change of
+3 tools, so a change of _mode_ (delta → full, act → extract) is a change of
 `kind`/`mode` parameter inside the same tool. This is a deliberate trade — it is
 what buys the 5.1× schema saving — but it is a real ergonomic difference.
 
@@ -187,11 +185,11 @@ reading the code.
 Not a firewall. Docker Desktop runs containers in a **LinuxKit VM with its own
 network namespace**, and `vite dev` binds `127.0.0.1` only:
 
-| Attempt | Result |
-|---|---|
-| `http://localhost:5175` | `ERR_CONNECTION_REFUSED` — the *container's* loopback |
+| Attempt                            | Result                                                |
+| ---------------------------------- | ----------------------------------------------------- |
+| `http://localhost:5175`            | `ERR_CONNECTION_REFUSED` — the _container's_ loopback |
 | `http://host.docker.internal:5175` | `403 Blocked request` — Vite ≥6 `server.allowedHosts` |
-| `docker run --network host` | maps to the **VM**, not the host — still refused |
+| `docker run --network host`        | maps to the **VM**, not the host — still refused      |
 
 No IP is dialable, and `--network host` does not help. The fix lives in the harness,
 **not in the app's `vite.config.ts`**:
@@ -202,10 +200,14 @@ splices to the host gateway, and **rewrites the `Host:` header back to
 plain URL and it just works:
 
 ```json
-{"ok":true,"action":"open","url":"http://localhost:5175/",
- "title":"Sepia — Memory Server for AI Agents",
- "bridgedVia":"host.docker.internal"}
-````
+{
+  "ok": true,
+  "action": "open",
+  "url": "http://localhost:5175/",
+  "title": "Sepia — Memory Server for AI Agents",
+  "bridgedVia": "host.docker.internal"
+}
+```
 
 Engaged only when a loopback URL is requested _and_ the direct dial fails, so a
 native `bun src/http.ts` run short-circuits at ~0 cost. Unreachable now yields

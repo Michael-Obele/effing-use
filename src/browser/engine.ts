@@ -968,7 +968,8 @@ export async function doObserve(
       return { title: await page.title().catch(() => ""), url: page.url() };
     case "snapshot": {
       const mode = (opts?.mode ?? (config.deltaDefault ? "delta" : "full")) as
-        "full" | "delta";
+        | "full"
+        | "delta";
       const scope = opts?.scope;
       // Navigation forces a fresh full baseline (plan §5.1) and needs a settle
       // beat: SPA routes hydrate after the URL changes — snapshots taken too
