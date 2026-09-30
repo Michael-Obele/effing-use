@@ -146,7 +146,42 @@ async function navigate(
       );
     }
   }
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+
+  // Slow real-world pages (duckduckgo, news sites with tracker scripts) miss a
+  // 15s domcontentloaded deadline even though the page is fine and interactive.
+  // Failing there wastes the whole turn, so on timeout check whether the
+  // document actually arrived; if it did, proceed and flag it as a slow load
+  // rather than reporting a false failure.
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const isTimeout = /Timeout .* exceeded|TimeoutError|waiting until/i.test(
+      msg,
+    );
+    if (!isTimeout) throw e;
+    const arrived = await page
+      .evaluate(() => {
+        const r = document.readyState;
+        return {
+          readyState: r,
+          nodes: document.getElementsByTagName("*").length,
+          text: (document.body?.innerText ?? "").trim().length,
+        };
+      })
+      .catch(() => null);
+    const usable =
+      arrived !== null &&
+      arrived.readyState !== "loading" &&
+      (arrived.nodes > 0 || arrived.text > 0);
+    if (!usable) throw e;
+    (page as unknown as Record<string, unknown>).__slowLoad = {
+      url,
+      readyState: arrived!.readyState,
+      nodes: arrived!.nodes,
+      textChars: arrived!.text,
+    };
+  }
 }
 
 /**
@@ -767,6 +802,14 @@ export async function doAct(
       (result as any).bridgedVia = bridgedVia;
       delete (page as unknown as Record<string, unknown>).__bridgedVia;
     }
+    // A navigation that missed the deadline but produced a real document is
+    // not a failure — say so, so the model knows the page may still be
+    // settling (late CSS/fonts/images) rather than fully loaded.
+    const slow = (page as unknown as Record<string, unknown>).__slowLoad;
+    if (slow) {
+      (result as any).slowLoad = slow;
+      delete (page as unknown as Record<string, unknown>).__slowLoad;
+    }
     // Mark dirty for delta
     ensureDeltaState(sid).dirty = true;
     try {
@@ -946,6 +989,11 @@ export async function doObserve(
         yaml = await buildSnapshot(page, scope);
         const path = await saveText(config, stamp("snapshot", "yaml"), yaml);
         const { text, truncated } = cap(yaml, config.outputMaxChars);
+        // Scoped refs are now GLOBAL (see buildSnapshot), so they are
+        // interchangeable with a full snapshot. Register the full-page
+        // fingerprints so identity validation/rebind works on a scoped ref.
+        const fps = await collectFingerprints(page);
+        registerFingerprints(sessionId, fps);
         clearMustObserve(sessionId);
         return {
           path,
@@ -976,6 +1024,7 @@ export async function doObserve(
             path,
             summary: text,
             truncated,
+            ...emptyHint(yaml),
             url: page.url(),
             title: await page.title().catch(() => ""),
             mode: "full",
@@ -985,8 +1034,10 @@ export async function doObserve(
         const dirty = await checkDirty(page).catch(() => true);
         if (!dirty) {
           clearMustObserve(sessionId);
+          const last = getBaseline(sessionId) ?? "";
           return {
             unchanged: true,
+            ...emptyHint(last),
             url: page.url(),
             title: await page.title().catch(() => ""),
             hint: "last snapshot still valid",
@@ -1000,6 +1051,7 @@ export async function doObserve(
           clearMustObserve(sessionId);
           return {
             unchanged: true,
+            ...emptyHint(baseline ?? ""),
             url: page.url(),
             title: await page.title().catch(() => ""),
             hint: "no changes",
@@ -1021,6 +1073,7 @@ export async function doObserve(
         return {
           delta: dtext,
           truncated,
+          ...emptyHint(yaml),
           url: page.url(),
           title: await page.title().catch(() => ""),
           mode: "delta",
@@ -1085,26 +1138,48 @@ export async function doObserve(
   }
 }
 
+/**
+ * Flag a snapshot that found NO interactive elements.
+ *
+ * effing-use reads the DOM, so a canvas-rendered UI, a remote desktop or an
+ * Electron app with custom-painted controls produces a snapshot with nothing in
+ * it. Without a signal the model reads `unchanged: true` and concludes the page
+ * is blank, or worse, that its own action did nothing. This is the cheap,
+ * honest nudge to escalate to `browser_extract kind=screenshot`.
+ */
+export function emptyHint(snapshot: string): Record<string, unknown> {
+  if (!snapshot.includes("(no interactive elements)")) return {};
+  return {
+    looksEmpty: true,
+    emptyHint:
+      "No DOM controls found. The UI may be canvas-rendered, inside a shadow root, or an image. Use browser_extract kind=screenshot before concluding the page is blank.",
+  };
+}
+
 async function buildSnapshot(page: Page, scope?: string): Promise<string> {
   const header = [
     "# Snapshot — refs are nth-match: eN = Nth match of (button, a, input, select, textarea, [role=button], [tabindex]) in DOM order.",
     `# url: ${page.url()}`,
   ].join("\n");
+  // Returns [description, globalRef] pairs. With a scope we still number
+  // against the WHOLE document so a scoped ref means the same element as the
+  // same ref in a full snapshot — otherwise `scope:"nav"` hands out e0 for the
+  // first nav link while e0 globally is some unrelated <section>, and the
+  // model clicks the wrong element (observed: E_TIMEOUT on <section>).
   const items = await page.evaluate((scopeSel) => {
+    const SEL = "button, a, input, select, textarea, [role=button], [tabindex]";
+    const all = Array.prototype.slice.call(
+      document.querySelectorAll(SEL),
+    ) as Element[];
+    const globalIndex = new Map<Element, number>();
+    all.forEach((el, i) => globalIndex.set(el, i));
+
     const root = scopeSel ? document.querySelector(scopeSel) : document;
-    if (!root) return [] as string[];
+    if (!root) return [] as Array<[string, number]>;
     const els = [
-      ...(root as Element).querySelectorAll(
-        "button, a, input, select, textarea, [role=button], [tabindex]",
-      ),
-    ];
-    // also include root itself if it matches
-    if (
-      scopeSel &&
-      (root as Element).matches?.(
-        "button, a, input, select, textarea, [role=button], [tabindex]",
-      )
-    ) {
+      ...((root as Element).querySelectorAll?.(SEL) ?? []),
+    ] as Element[];
+    if (scopeSel && (root as Element).matches?.(SEL)) {
       els.unshift(root as Element);
     }
     return els.slice(0, 200).map((el) => {
@@ -1141,10 +1216,16 @@ async function buildSnapshot(page: Page, scope?: string): Promise<string> {
       ]
         .filter(Boolean)
         .join(" ");
-      return `${tag} "${text}"${extra ? " " + extra : ""}${checked}`;
+      return [
+        `${tag} "${text}"${extra ? " " + extra : ""}${checked}`,
+        // An element outside `all` (e.g. the scope root itself, if it is
+        // inside another matched subtree) still needs a stable index; fall
+        // back to its position in the document-order list we built.
+        globalIndex.get(el) ?? -1,
+      ] as [string, number];
     });
   }, scope ?? null);
-  const lines = items.map((line, i) => `[e${i}] ${line}`);
+  const lines = items.map(([line, idx]) => `[e${idx}] ${line}`);
   return `${header}\n${lines.join("\n") || "(no interactive elements)"}`;
 }
 

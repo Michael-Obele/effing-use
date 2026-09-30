@@ -10,6 +10,7 @@ import { computeDelta } from "../src/browser/delta.js";
 import { parseExpect } from "../src/browser/evidence.js";
 import { isIrreversible } from "../src/browser/macro.js";
 import { macroLocator } from "../src/browser/refs.js";
+import { emptyHint as emptyHintForTest } from "../src/browser/engine.js";
 import { rewriteHostHeader } from "../src/browser/bridge.js";
 import {
   getReplayCursor,
@@ -342,8 +343,27 @@ describe("macroLocator() — plan §6.2 standalone selectors", () => {
   });
 });
 
+describe("macroLocator() snapshot emptiness signal", () => {
+  // A canvas/shadow-DOM page yields a snapshot with zero interactive elements.
+  // Without a signal the model reads `unchanged:true` and concludes its own
+  // action did nothing — a silent failure. Found on a canvas-only test page.
+  test("a snapshot with no controls is flagged", () => {
+    const out = emptyHintForTest(
+      "# Snapshot — refs are nth-match\n# url: x\n(no interactive elements)",
+    );
+    expect(out.looksEmpty).toBe(true);
+    expect(String(out.emptyHint)).toContain("screenshot");
+  });
+
+  test("a normal snapshot is not flagged", () => {
+    const out = emptyHintForTest(
+      '# Snapshot — refs are nth-match\n# url: x\n[e0] a "Home"',
+    );
+    expect(out.looksEmpty).toBeUndefined();
+  });
+});
+
 describe("loopback bridge host header rewrite", () => {
-  // Vite >=6 answers 403 "Blocked request. This host (...) is not allowed" for
   // a Host header that is not localhost, which is why opening
   // host.docker.internal:5175 failed. The bridge splices container loopback to
   // the host and rewrites Host: back to localhost so no vite.config change is

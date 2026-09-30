@@ -4,7 +4,7 @@
 
 Full Chromium automation in **3 tools, 4.0 KB**. Same pages, same clicks, same scrapes — without the 25-tool handshake eating your context window before you load a page.
 
-**Measured, not marketed:** `tools/list` is **3,955 bytes** here vs **20,286 bytes** for `@playwright/mcp@latest` — **5.1× smaller**, ~16.3 KB saved every session. Re-observing after an action costs **70 tokens** instead of **3,857** (Playwright has no delta mode). End-to-end on the same task: **10.1× cheaper**. Full method + numbers in [`docs/FINDINGS.md`](docs/FINDINGS.md).
+**Measured, not marketed:** `tools/list` is **3,955 bytes** here vs **20,286 bytes** for `@playwright/mcp@latest` — **5.1× smaller**, ~16.3 KB saved every session. Re-observing after an action costs **70 tokens** instead of **3,857** (Playwright has no delta mode). Across 8 real websites, end-to-end: **15.7× cheaper** and **1.43× faster**. Full method, per-site numbers, and an honest account of where this loses: [`docs/FINDINGS.md`](docs/FINDINGS.md).
 
 ## Install (Bun-only)
 
