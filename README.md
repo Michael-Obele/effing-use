@@ -180,7 +180,17 @@ docker compose up --build -d
 docker rm -f effing-use-computer-use-1 && docker compose up -d
 ```
 
-Compose details: `restart: unless-stopped`, `init: true` + `ipc: host` (Playwright flags), `.browser-use/` bind-mounted, `EFFING_PORT` overrides host port (`EFFING_PORT=4000 docker compose up -d`).
+Compose details: `restart: unless-stopped`, `init: true` + `ipc: host` (Playwright flags), `.browser-use/` bind-mounted, `EFFING_PORT` overrides host port (`EFFING_PORT=4000 docker compose up -d`). CPU capped at 2 cores / 2 GB (`cpus`, `mem_limit` in `compose.yaml`).
+
+### Keeping CPU down
+
+The browser used to sit at 400%+ in `docker stats`: it never closed idle pages, ran background tabs at full speed, and re-read the whole DOM on every action. Now:
+
+- Idle sessions close after 5 min, the browser after 10 min idle (`EFFING_IDLE_TTL_MS`, `EFFING_BROWSER_TTL_MS`). Next call relaunches on its own.
+- Background tabs are throttled, software GL is off, fonts/media are blocked, animations are reduced. Set `EFFING_BLOCK_ASSETS=none` or `EFFING_REDUCED_MOTION=0` if you need the real thing.
+- Screenshots are viewport-only unless you pass `target: "full"`.
+- `curl localhost:3123/metrics` shows per-tool timings and idle age; `curl localhost:3123/debug` adds the slow-call list. Check these before reaching for `docker stats`.
+- If the box still feels hot: `docker compose down` when you are not using it, or run natively (`bun src/http.ts`) to skip the Docker Desktop VM overhead.
 
 ### Opening a local dev server (`http://localhost:5175`) from the container
 
@@ -256,6 +266,43 @@ v2 turns the browser into a harness: AI actions are verifiable, diffable, and re
 
 - `effing-use observe/act/extract` over `EFFING_USE_URL` (`http://localhost:3123/mcp`) — for terminal agents, scripts, and CI. See [CLI usage](#cli-usage).
 
+## Long debugging sessions
+
+Hours-long agent runs used to lose their evidence: the console/network rings held 50 entries, uncaught errors and failed requests were never captured, and nothing tied a tool call to what the browser did. Now every session writes an append-only **JSONL journal** to disk.
+
+- **Where:** `${OUTPUT_DIR}/sessions/<session-id>/journal.jsonl`, one JSON record per line. Rotation keeps the current file plus one previous file (`journal.1.jsonl`); reads include the rotated file first.
+- **Enabled by default; redacted by default.** `EFFING_JOURNAL=0` (or `false`) disables it. Every string field is clipped to 4,000 chars, and secret-shaped fields (`password`, `token`, `authorization`, `cookie`, …) become `«redacted»` unless `RECORD_REDACT=false`.
+- **What it captures:** tool calls (tool, key, duration, ok, code, url, path), console messages, page errors, responses, failed requests, main-frame navigation, and crashes. No request/response bodies — those are deferred (size and secret risk) — and no dialog capture (a persistent `dialog` listener would break `dialog_accept`/`dialog_dismiss`).
+- **Journal I/O never fails a tool call.** Write and read errors are swallowed; a failed call still returns its envelope. Every error envelope carries a `journal` field with the session's log path so a follow-up query can read the evidence without re-running the flow.
+
+Query it through the normal tools — no extra tool:
+
+```jsonc
+{ "kind": "errors" }                                   // deduped page errors + console errors + network failures
+{ "kind": "console", "level": "error", "since": "10m" }  // filtered console, newest last
+{ "kind": "network", "filter": "/api/", "since": "10m" } // responses + failures
+// browser_extract
+{ "kind": "timeline", "since": "1h", "limit": 100 }   // one compact line per call/event
+```
+
+- `since` accepts ISO or relative (`30s`, `5m`, `2h`, `1d`); `filter` is a case-insensitive substring over type, url, and the whole record; `level` narrows console reads; `offset`/`limit` paginate (console/network default 20, cap 200; timeline default 100, cap 500). Results report `total` and `truncated`.
+- `kind=console` still returns `logs` and `kind=network` still returns `requests`, so existing callers keep working. When `EFFING_JOURNAL=0`, those two kinds fall back to the in-memory 50-entry rings.
+
+CLI equivalents:
+
+```bash
+EFFING_USE_URL=http://localhost:3123/mcp effing-use observe --kind errors
+EFFING_USE_URL=http://localhost:3123/mcp effing-use extract --kind timeline --since 1h --limit 100
+```
+
+**For long manual sessions, disable the idle reaper** so the browser and its page survive between your calls:
+
+```bash
+EFFING_IDLE_TTL_MS=0 EFFING_BROWSER_TTL_MS=0 bun src/http.ts
+```
+
+**v1 boundary:** no request/response bodies, no snapshot history/diff API, no eval escape hatch, no frame targeting, no HAR. The deferred map lives in [`docs/PLAN-debug-sessions.md`](docs/PLAN-debug-sessions.md).
+
 ## The loop (agents: follow this order)
 
 1. `browser_observe` kind=`snapshot` → get `[eN]` refs (default `mode: delta` — only changed lines; `mode: full` for complete dump; `scope: "<css>"` for subtree). Never guess refs, re-snapshot after navigation.
@@ -268,8 +315,8 @@ CLI equivalent: `effing-use observe --kind snapshot --mode delta` / `effing-use 
 ## Tools
 
 - `browser_act` — open/goto, click, dblclick, fill, type, press, select, check/uncheck, hover, drag, upload, scroll, back/forward/reload, wait, dialog_accept/dismiss, tabs (new/select/close), resize, close, `goal`, `batch`, `note`, `record_start`/`record_stop`, `compile`, `replay` (+ `expect` + `approve`)
-- `browser_observe` — snapshot (e-refs, `mode: full|delta` default delta, `scope`), screenshot (path), url, title, console (last N), network (method/url/status ring), tabs, focused
-- `browser_extract` — text, html, table (≤100 rows JSON), query (text|href|json), pdf, trace_start/stop, `state`
+- `browser_observe` — snapshot (e-refs, `mode: full|delta` default delta, `scope`), screenshot (path), url, title, `errors` (deduped page/console/network failures), `console` (journal-backed, `level`/`since`/`filter`), `network` (journal-backed, `since`/`filter`), tabs, focused
+- `browser_extract` — text, html, table (≤100 rows JSON), query (text|href|json), pdf, trace_start/stop, `state`, `timeline` (chronological calls + browser events)
 
 Errors are always `{ ok: false, code, message, hint }` with `E_NOT_FOUND | E_TIMEOUT | E_NO_PAGE | E_BAD_INPUT | E_GOAL_UNCLEAR | E_STALE | E_EXPECT | E_BAD_EXPECT | E_MUST_OBSERVE | E_APPROVAL_REQUIRED | E_LOCALHOST_UNREACHABLE` — never a stack trace.
 
@@ -335,7 +382,7 @@ Artifacts: `recordings/*.json` (raw steps), `macros/*.ts` (Playwright `run(page)
 
 ## Config
 
-Env defaults in [`.env.example`](.env.example): `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR` (`.browser-use/`, gitignored), `OUTPUT_MAX_CHARS`, `ALLOW_EVAL`, `DELTA_DEFAULT`, `EFFECT_MAX_CHARS`, `STATE_MAX_LINES`, `RECORD_REDACT`, `EFFING_USE_URL`.
+Env defaults in [`.env.example`](.env.example): `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR` (`.browser-use/`, gitignored), `OUTPUT_MAX_CHARS`, `ALLOW_EVAL`, `DELTA_DEFAULT`, `EFFECT_MAX_CHARS`, `STATE_MAX_LINES`, `RECORD_REDACT`, `JOURNAL` (default on), `JOURNAL_MAX_BYTES` (default 2,000,000), `EFFING_USE_URL`.
 
 Agent skill: `skills/effing-use/SKILL.md` (skills.sh-ready).
 

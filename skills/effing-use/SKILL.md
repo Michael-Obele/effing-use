@@ -62,6 +62,32 @@ effing-use extract --kind state --session dev
 
 Set `EFFING_USE_URL` (default `http://localhost:3123/mcp`). Requires a running `bun src/http.ts` server.
 
+## Debugging a long session
+
+Every session writes an append-only JSONL journal
+(`${OUTPUT_DIR}/sessions/<id>/journal.jsonl`, redacted, enabled by default). Tool
+calls, console, page errors, responses, failed requests, navigation, and crashes
+all land there, so evidence survives the 50-entry in-memory rings, context
+compaction, and idle reaping.
+
+```bash
+browser_observe kind=errors                            # deduped page/console/network failures
+browser_observe kind=console level=error since=10m     # filtered console (logs key kept)
+browser_observe kind=network filter=/api/ since=10m    # responses + failures (requests key kept)
+browser_extract kind=timeline since=1h limit=100       # one compact line per call/event
+```
+
+- `since` is ISO or relative (`30s`/`5m`/`2h`/`1d`); `filter` is a case-insensitive
+  substring over type + url + record; `offset`/`limit` paginate (console/network
+  cap 200, timeline cap 500); results carry `total` and `truncated`.
+- Every error envelope includes `journal: <path>` — read it instead of re-running
+  the flow.
+- `EFFING_JOURNAL=0` disables the journal (console/network then fall back to the
+  in-memory rings). `EFFING_JOURNAL_MAX_BYTES` caps disk use (default 2 MB, one
+  rotated `journal.1.jsonl`).
+- For long manual sessions, disable the idle reaper so the page survives:
+  `EFFING_IDLE_TTL_MS=0 EFFING_BROWSER_TTL_MS=0`.
+
 ## Record → replay
 
 ```bash

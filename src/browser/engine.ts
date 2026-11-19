@@ -41,6 +41,12 @@ import {
   extractFingerprints as collectFingerprints,
 } from "./identity.js";
 import { ensureLoopbackBridge, inContainer } from "./bridge.js";
+import {
+  formatEventLine,
+  parseSince,
+  readJournal,
+  summarizeErrors,
+} from "./journal.js";
 
 export type ActAction =
   | "open"
@@ -87,6 +93,10 @@ export interface ObserveOpts {
   sessionId?: string;
   mode?: "full" | "delta";
   scope?: string;
+  since?: string;
+  filter?: string;
+  level?: string;
+  offset?: number;
 }
 
 function timeoutOf(config: Config): number {
@@ -410,12 +420,17 @@ export async function doAct(
 
   const urlBefore = page.url();
   let domBefore: string | null = null;
+  const domCap = config.domCapChars ?? 20000;
   try {
-    // Full innerText (50k cap) — evidence diffs need the whole page, not just
-    // the first 200 chars (v0.2: below-fold changes looked like no-ops).
-    domBefore = await page.evaluate(
-      () => document.body?.innerText?.slice(0, 50000) ?? "",
-    );
+    // textContent, not innerText: innerText forces a full layout/style recalc
+    // in the renderer (expensive under SwiftShader software rendering).
+    // textContent is layout-free and sufficient for change detection.
+    domBefore = await page
+      .evaluate(
+        (cap: number) => document.body?.textContent?.slice(0, cap) ?? "",
+        domCap,
+      )
+      .catch(() => null);
   } catch {
     domBefore = null;
   }
@@ -772,6 +787,7 @@ export async function doAct(
       consoleBefore,
       networkBefore,
       config.effectMaxChars,
+      domCap,
     );
     // Failure contract: timeout with no DOM/URL change => mustObserve
     if (isTimeout && !effect.urlChanged && effect.domChanged.length === 0)
@@ -968,8 +984,7 @@ export async function doObserve(
       return { title: await page.title().catch(() => ""), url: page.url() };
     case "snapshot": {
       const mode = (opts?.mode ?? (config.deltaDefault ? "delta" : "full")) as
-        | "full"
-        | "delta";
+        "full" | "delta";
       const scope = opts?.scope;
       // Navigation forces a fresh full baseline (plan §5.1) and needs a settle
       // beat: SPA routes hydrate after the URL changes — snapshots taken too
@@ -978,8 +993,13 @@ export async function doObserve(
       const urlChanged = prevUrl !== null && prevUrl !== page.url();
       const settleHydration = async () => {
         if (!urlChanged) return;
+        // networkidle on tracker-heavy pages always waits the FULL timeout
+        // (network service + renderer spin). Keep it short; the snapshot
+        // still captures post-hydration DOM via the 80ms beat.
         await page
-          .waitForLoadState("networkidle", { timeout: 1500 })
+          .waitForLoadState("networkidle", {
+            timeout: config.settleNetworkIdleMs ?? 800,
+          })
           .catch(() => {});
         await page.waitForTimeout(80);
       };
@@ -1100,7 +1120,10 @@ export async function doObserve(
       };
     }
     case "screenshot": {
-      const full = (target ?? "") === "full" || (target ?? "") === "";
+      // Viewport-only by default. fullPage:true rasterises the whole page in
+      // software (SwiftShader) and is 3-5x the CPU — request it explicitly
+      // with target:"full" only when you need below-fold pixels.
+      const full = target === "full";
       const filename = stamp("shot", "png");
       const { mkdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
@@ -1109,15 +1132,108 @@ export async function doObserve(
       await page.screenshot({ path, fullPage: full });
       return { path, url: page.url() };
     }
+    case "errors": {
+      const read = await readJournal(config, sessionId, {
+        since: opts?.since,
+        filter: opts?.filter,
+      });
+      const summary = summarizeErrors(read.events);
+      return { ...summary, journal: read.path, totalEvents: read.total };
+    }
     case "console": {
-      const logs = getConsoleLogs(sessionId);
-      const n = limit ?? 20;
-      return { logs: logs.slice(-n) };
+      if (config.journal === false) {
+        const n = Math.max(0, Math.min(limit ?? 20, 200));
+        const offset = Math.max(0, opts?.offset ?? 0);
+        const sinceIso = opts?.since ? parseSince(opts.since) : null;
+        const needle = opts?.filter?.toLowerCase();
+        const all = getConsoleLogs(sessionId).filter((e) => {
+          if (opts?.level && e.type !== opts.level) return false;
+          if (sinceIso && Date.parse(e.at) < Date.parse(sinceIso)) return false;
+          if (needle && !JSON.stringify(e).toLowerCase().includes(needle))
+            return false;
+          return true;
+        });
+        const page = all.slice(offset, offset + n);
+        return {
+          logs: page,
+          total: all.length,
+          path: "",
+          truncated: offset + page.length < all.length,
+        };
+      }
+      const read = await readJournal(config, sessionId, {
+        type: "console",
+        since: opts?.since,
+        filter: opts?.filter,
+        level: opts?.level,
+        offset: opts?.offset,
+        limit: Math.min(limit ?? 20, 200),
+      });
+      const logs = read.events.map((e) => {
+        const f = e as Record<string, unknown>;
+        return {
+          type: f.level,
+          text: f.text,
+          at: e.ts,
+          url: f.url,
+          line: f.line,
+          column: f.column,
+        };
+      });
+      return {
+        logs,
+        total: read.total,
+        path: read.path,
+        truncated: read.truncated,
+      };
     }
     case "network": {
-      const logs = getNetworkLogs(sessionId);
-      const n = limit ?? 20;
-      return { requests: logs.slice(-n) };
+      if (config.journal === false) {
+        const n = Math.max(0, Math.min(limit ?? 20, 200));
+        const offset = Math.max(0, opts?.offset ?? 0);
+        const sinceIso = opts?.since ? parseSince(opts.since) : null;
+        const needle = opts?.filter?.toLowerCase();
+        const all = getNetworkLogs(sessionId).filter((e) => {
+          if (sinceIso && Date.parse(e.at) < Date.parse(sinceIso)) return false;
+          if (needle && !JSON.stringify(e).toLowerCase().includes(needle))
+            return false;
+          return true;
+        });
+        const page = all.slice(offset, offset + n);
+        return {
+          requests: page,
+          total: all.length,
+          path: "",
+          truncated: offset + page.length < all.length,
+        };
+      }
+      const read = await readJournal(config, sessionId, {
+        type: ["response", "requestfailed"],
+        since: opts?.since,
+        filter: opts?.filter,
+        offset: opts?.offset,
+        limit: Math.min(limit ?? 20, 200),
+      });
+      const requests = read.events.map((e) => {
+        const f = e as Record<string, unknown>;
+        return {
+          method: f.method,
+          url: e.url,
+          status: typeof f.status === "number" ? f.status : 0,
+          at: e.ts,
+          requestId: f.requestId,
+          resourceType: f.resourceType,
+          ok: f.ok,
+          durationMs: f.durationMs,
+          failure: f.failure,
+        };
+      });
+      return {
+        requests,
+        total: read.total,
+        path: read.path,
+        truncated: read.truncated,
+      };
     }
     case "tabs": {
       const ctx = opts?.context ?? page.context();
@@ -1134,7 +1250,7 @@ export async function doObserve(
       throw new EngineError(
         "E_BAD_INPUT",
         `Unknown observe kind "${kind}".`,
-        "Valid: snapshot, screenshot, url, title, console, network, tabs, focused.",
+        "Valid: snapshot, screenshot, url, title, errors, console, network, tabs, focused.",
       );
   }
 }
@@ -1246,9 +1362,14 @@ export async function doExtract(
         ? ((await page
             .locator(selector)
             .first()
-            .innerText()
+            .evaluate((el) => el.textContent ?? "")
             .catch(() => "")) as string)
-        : ((await page.innerText("body").catch(() => "")) as string);
+        : ((await page
+            .evaluate(
+              (cap: number) => document.body?.textContent?.slice(0, cap) ?? "",
+              config.domCapChars ?? 20000,
+            )
+            .catch(() => "")) as string);
       const path = await saveText(config, stamp("text", "txt"), text);
       const { text: preview, truncated } = cap(text, config.outputMaxChars);
       return { path, preview, truncated };
@@ -1341,11 +1462,26 @@ export async function doExtract(
         dirty,
       };
     }
+    case "timeline": {
+      const sid = opts?.sessionId ?? "default";
+      const read = await readJournal(config, sid, {
+        since: opts?.since,
+        filter: opts?.filter,
+        limit: Math.min(limit ?? 100, 500),
+        offset: opts?.offset,
+      });
+      return {
+        lines: read.events.map(formatEventLine),
+        count: read.total,
+        path: read.path,
+        truncated: read.truncated,
+      };
+    }
     default:
       throw new EngineError(
         "E_BAD_INPUT",
         `Unknown extract kind "${kind}".`,
-        "Valid: text, html, table, query, pdf, trace_start, trace_stop, state.",
+        "Valid: text, html, table, query, pdf, trace_start, trace_stop, state, timeline.",
       );
   }
 }
