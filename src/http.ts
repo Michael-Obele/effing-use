@@ -25,6 +25,42 @@ Bun.serve({
     if (url.pathname === "/healthz") {
       return Response.json({ ok: true, name: "effing-use" });
     }
+    // Cheap CPU telemetry for "what is eating my machine" debugging.
+    // No browser touch, no allocations beyond JSON — safe to poll.
+    //   curl localhost:3123/metrics  -> per-tool timings + session idle age
+    //   curl localhost:3123/debug    -> same + slow-call list
+    if (url.pathname === "/metrics" || url.pathname === "/debug") {
+      const { getTelemetry } = await import("./browser/session.js");
+      const { VERSION } = await import("./config.js");
+      const tele = getTelemetry() as Record<string, unknown>;
+      if (url.pathname === "/metrics") {
+        const calls = tele.calls as Record<
+          string,
+          { count: number; avgMs: number; maxMs: number }
+        >;
+        const lines = ["# effing-use tool timings"];
+        for (const [k, s] of Object.entries(calls)) {
+          lines.push(`tool_calls{op="${k}"} ${s.count}`);
+          lines.push(`tool_avg_ms{op="${k}"} ${s.avgMs}`);
+          lines.push(`tool_max_ms{op="${k}"} ${s.maxMs}`);
+        }
+        const sess = tele.sessions as Record<string, { idleSec: number }>;
+        for (const [id, s] of Object.entries(sess)) {
+          lines.push(`session_idle_sec{id="${id}"} ${s.idleSec}`);
+        }
+        lines.push(`browser_idle_sec ${(tele.browserIdleSec as number) ?? 0}`);
+        lines.push(`browser_uptime_sec ${(tele.uptimeSec as number) ?? 0}`);
+        return new Response(lines.join("\n") + "\n", {
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      return Response.json({
+        ok: true,
+        name: "effing-use",
+        version: VERSION,
+        ...tele,
+      });
+    }
     const response = await transport.respond(req);
     if (response === null) {
       return new Response("Not Found", { status: 404 });

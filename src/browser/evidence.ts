@@ -42,17 +42,20 @@ export async function collectEffect(
   consoleBeforeLen: number,
   networkBeforeLen: number,
   maxChars = EFFECT_MAX_CHARS_DEFAULT,
+  domCap = 20000,
 ): Promise<Effect> {
   const urlAfter = page.url();
   const urlChanged = urlBefore !== urlAfter;
 
-  // domChanged: line-level diff of body.innerText (50k cap). v0.2 only
-  // compared the first 200 chars, so any below-fold change looked like a no-op
-  // (and fed the failure contract wrong "no DOM change" signals).
+  // domChanged: line-level diff of body.textContent (layout-free; innerText
+  // forces a full recalc under SwiftShader). v0.2 only compared the first 200
+  // chars, so any below-fold change looked like a no-op (and fed the failure
+  // contract wrong "no DOM change" signals).
   let domChanged: string[] = [];
   try {
     const currentDom = await page.evaluate(
-      () => document.body?.innerText?.slice(0, 50000) ?? "",
+      (cap: number) => document.body?.textContent?.slice(0, cap) ?? "",
+      domCap,
     );
     if (domBeforeHash !== null && currentDom !== domBeforeHash) {
       const before = new Set(
@@ -157,7 +160,9 @@ export async function evaluateExpect(
         };
       }
       case "text": {
-        const text = await page.innerText("body").catch(() => "");
+        const text = await page
+          .evaluate(() => document.body?.textContent ?? "")
+          .catch(() => "");
         const slice = text.slice(0, 50000);
         const re = new RegExp(parsed.pattern);
         if (re.test(slice)) return { ok: true };

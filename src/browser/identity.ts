@@ -90,18 +90,16 @@ export const RAW_FP_SCRIPT = `(() => {
   };
   const els = Array.prototype.slice.call(document.querySelectorAll(SEL), 0, 200);
   return els.map((el) => {
-    const rect = el.getBoundingClientRect();
+    // No getBoundingClientRect(): it forces a full layout per element
+    // (200x per snapshot + once per e-ref validation) and box is not used
+    // by the hot-path identity check (role+name+textHash only). Zeros keep
+    // fingerprintEquals stable across scrolls instead of fragile.
     return {
       role: implicitRole(el),
       accessibleName: accName(el),
       text: textOf(el),
       pathHash: pathOf(el),
-      box: {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        w: Math.round(rect.width),
-        h: Math.round(rect.height)
-      }
+      box: { x: 0, y: 0, w: 0, h: 0 }
     };
   });
 })()`;

@@ -17,6 +17,12 @@ services:
       # (container always listens on 3123 internally, so only the
       # left-hand side changes — healthcheck and app config stay as-is)
       - "${EFFING_PORT:-3123}:3123"
+    # Cap the blast radius: without limits one heavy page (software GL +
+    # 4 raster threads fanning out over the host) can sit at 400%+ and push
+    # host load past core count. 2 CPUs is plenty for an agent browser;
+    # raise to 4 if full-page screenshots feel slow.
+    cpus: "2.0"
+    mem_limit: 2g
     environment:
       PORT: "3123"
       BROWSER_HEADLESS: "true"
@@ -26,6 +32,23 @@ services:
       OUTPUT_DIR: /app/.browser-use
       OUTPUT_MAX_CHARS: "4000"
       ALLOW_EVAL: "false"
+      # Idle lifecycle: close sessions after 5 min idle, close the whole
+      # browser after 10 min with no sessions. The next tool call relaunches
+      # transparently. Set to "0" to disable (not recommended in Docker).
+      EFFING_IDLE_TTL_MS: "300000"
+      EFFING_BROWSER_TTL_MS: "600000"
+      # Asset blocking: abort font + media requests (webfonts, video, audio).
+      # Big CPU win on ad/media-heavy pages; screenshots keep images.
+      # Use "image,font,media" for max savings, "none" to disable.
+      EFFING_BLOCK_ASSETS: "font,media"
+      # Reduced motion: tell pages to skip animations (plus Chromium flag).
+      # Set to "0" only if testing animations themselves.
+      EFFING_REDUCED_MOTION: "1"
+      # Snapshot settle: how long to wait for networkidle after a navigation
+      # before snapshotting. Tracker-heavy pages always burn the full window.
+      EFFING_SETTLE_IDLE_MS: "800"
+      # DOM read cap for change detection (layout-free textContent).
+      EFFING_DOM_CAP: "20000"
       # Loopback bridge (src/browser/bridge.ts). Lets the container open
       # http://localhost:<port> for a dev server bound to 127.0.0.1 on the
       # host, WITHOUT editing the app's vite.config.ts. The bridge splices
@@ -41,14 +64,11 @@ services:
       # Persist snapshots / screenshots / PDFs on the host for inspection
       - ./.browser-use:/app/.browser-use
     healthcheck:
-      test:
-        [
-          "CMD",
-          "bun",
-          "-e",
-          "fetch('http://localhost:3123/healthz').then(r=>{if(!r.ok)process.exit(1)})",
-        ]
-      interval: 10s
+      # curl, not `bun -e`: spawning a full Bun runtime every 10s costs CPU
+      # on every check. curl is already in the Playwright base image.
+      # 30s interval: this is a local agent browser, not a public service.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3123/healthz > /dev/null"]
+      interval: 30s
       timeout: 5s
-      retries: 5
+      retries: 3
       start_period: 20s
