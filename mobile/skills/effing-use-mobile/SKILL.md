@@ -20,8 +20,12 @@ screenshots in the normal loop.
 # Bun, from the Capacitor project root (appId becomes the package name)
 bunx --package effing-use-mobile effing-use-mobile
 
-# Docker (in the container use MOBILE_CDP_HOST=host.docker.internal, and start
-# the host adb server with `adb -a -P 5037 start-server`)
+# Docker daemon: one container, /mcp on :3130 (usecurl /debug to see the attach)
+MOBILE_PACKAGE=com.your.app docker compose -f mobile/compose.yaml up -d --build mobile-http
+
+# Docker stdio: container per client; in the container use
+# MOBILE_CDP_HOST=host.docker.internal and start the host adb server with
+# `adb -a -P 5037 start-server`
 docker compose -f mobile/compose.yaml run --rm -i mobile
 ```
 

@@ -23,6 +23,10 @@ First release. Android + Capacitor.
   `adb exec-out screencap`, HAR export.
 - **Docker**: image talks to the host's adb server (`adb -a`); `MOBILE_CDP_HOST`
   makes the forwarded devtools port reachable from the container.
+- **Two transports**: `effing-use-mobile` (stdio, spawned per client) and
+  `effing-use-mobile-http` (`/mcp` on `:3130`, one long-lived process sharing the
+  adb forward). The compose file runs stdio as `mobile` and the daemon as
+  `mobile-http`, so the container can stay up the way the browser server does.
 - **Verified**: Phase 0 loop on an Android emulator (attach 230–560 ms, snapshot
   19–47 ms, tap 64–364 ms, no-op delta 10–20 ms) both natively and through
   Docker.

@@ -105,6 +105,25 @@ export function findSession(sid: string): MobileSession | undefined {
   return sessions.get(sid);
 }
 
+/**
+ * One-line-per-session state for the HTTP entry's /debug. Deliberately does no
+ * device work: it must stay safe to poll while a tool call is in flight.
+ */
+export function listSessions(): Array<Record<string, unknown>> {
+  return [...sessions.values()].map((s) => ({
+    id: s.id,
+    device: s.device.serial,
+    package: s.pkg,
+    attached: !!s.cdp && !s.cdp.isClosed,
+    webview: s.webview?.url ?? null,
+    attachedSecAgo: s.attachedAt
+      ? Math.round((Date.now() - s.attachedAt) / 1000)
+      : null,
+    calls: s.calls,
+    lastCallId: s.lastCallId || null,
+  }));
+}
+
 type DevtoolsTarget = {
   id: string;
   type: string;

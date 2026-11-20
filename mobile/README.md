@@ -34,7 +34,12 @@ The container has no USB bus, so it talks to the **adb server on your host**.
 # 1. On the host, once: adb must listen on all interfaces, not just loopback.
 adb kill-server && adb -a -P 5037 start-server
 
-# 2. Build and run (stdio MCP — `-i` keeps stdin open).
+# 2a. Daemon (HTTP transport) — one container, shared by every editor.
+MOBILE_PACKAGE=com.your.app docker compose -f mobile/compose.yaml up -d --build mobile-http
+curl -s localhost:3130/healthz        # {"ok":true,...}
+curl -s localhost:3130/debug          # which device/app it is attached to
+
+# 2b. stdio — the client spawns a container per session (`-i` keeps stdin open).
 docker compose -f mobile/compose.yaml build
 docker compose -f mobile/compose.yaml run --rm -i mobile
 ```
@@ -56,12 +61,17 @@ machine running the **adb server** (the host), so the container must dial the
 host, not its own loopback. `adb -a` is what makes those forwards reachable from
 outside the host.
 
-An MCP client entry for Docker:
+stdio exits when its client does, so it can never be a container that stays up.
+`mobile-http` is the service to leave running: it holds one adb forward and one
+CDP socket, and every editor shares them — the same shape as the browser server.
+
+MCP client entries — daemon first, then the per-session fallback:
 
 ```json
 {
   "mcpServers": {
-    "effing-use-mobile": {
+    "effing-use-mobile": { "type": "http", "url": "http://localhost:3130/mcp" },
+    "effing-use-mobile (stdio)": {
       "command": "docker",
       "args": [
         "run",
@@ -132,6 +142,7 @@ An MCP client entry for Docker:
 | `MOBILE_CDP_HOST`     | `127.0.0.1`                       | host owning the adb forward (`host.docker.internal` in Docker) |
 | `MOBILE_OUTPUT_DIR`   | `.effing-mobile`                  | journal + artifacts                                            |
 | `MOBILE_SETTLE_MS`    | `120`                             | wait after a dispatched input                                  |
+| `MOBILE_PORT`         | `3130`                            | port for the HTTP entry (`src/http.ts`)                        |
 | `MOBILE_ALLOW_EVAL`   | `0`                               | allow `act action=eval`                                        |
 | `MOBILE_JOURNAL`      | on                                | append-only JSONL evidence                                     |
 | `MOBILE_SNAPSHOT_MAX` | `150`                             | refs per snapshot                                              |

@@ -10,11 +10,7 @@
     "effing-use (stdio)": {
       "type": "stdio",
       "command": "bunx",
-      "args": [
-        "--package",
-        "effing-use",
-        "effing-use-stdio"
-      ],
+      "args": ["--package", "effing-use", "effing-use-stdio"],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
@@ -25,23 +21,26 @@
     "effing-use-npm": {
       "type": "stdio",
       "command": "bunx",
-      "args": [
-        "--package",
-        "effing-use",
-        "effing-use-stdio"
-      ],
+      "args": ["--package", "effing-use", "effing-use-stdio"],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
       }
     },
-    // effing-use-mobile — its own package in ./mobile, running from Docker.
-    // Requires, once per host session:
-    //   adb kill-server && adb -a -P 5037 start-server
-    //   docker compose -f mobile/compose.yaml build
+    // effing-use-mobile — its own package in ./mobile.
+    // Daemon mode first: one long-lived container holds the adb forward and the
+    // CDP socket, shared by every editor. Start it with
+    //   MOBILE_PACKAGE=com.your.app docker compose -f mobile/compose.yaml up -d --build mobile-http
+    "effing-use-mobile (http)": {
+      "type": "http",
+      "url": "http://localhost:3130/mcp"
+    },
+
+    // stdio mode: Docker spawns a container per client session. Requires, once
+    // per host session: adb kill-server && adb -a -P 5037 start-server
     // Set the app under test (or drop this entry's -e MOBILE_PACKAGE and mount
     // the Capacitor project so capacitor.config.* supplies appId).
-    "effing-use-mobile (docker)": {
+    "effing-use-mobile (docker stdio)": {
       "type": "stdio",
       "command": "docker",
       "args": [

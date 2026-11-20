@@ -13,9 +13,11 @@ RUN bun install --production --frozen-lockfile
 FROM oven/bun:1-slim
 
 # adb is the transport to the device. Debian ships it as its own `adb` package
-# (android-sdk-platform-tools alone does not include the binary).
+# (android-sdk-platform-tools alone does not include the binary). curl is not a
+# dependency of either, but the compose healthcheck polls /healthz with it, and
+# spawning a whole Bun runtime every 30s just to probe is the expensive way.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends adb ca-certificates \
+  && apt-get install -y --no-install-recommends adb ca-certificates curl \
   && rm -rf /var/lib/apt/lists/* \
   && adb version
 

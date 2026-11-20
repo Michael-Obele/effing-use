@@ -1,57 +1,61 @@
 {
-    "name": "effing-use-mobile",
-    "version": "0.1.0",
-    "description": "Token-efficient Android/Capacitor control: 3 MCP tools (act, observe, extract) over adb + the WebView devtools protocol — no Appium, no drivers",
-    "license": "MIT",
-    "author": "Michael Obubelebra Amachree",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/Michael-Obele/effing-use.git",
-        "directory": "mobile"
-    },
-    "homepage": "https://github.com/Michael-Obele/effing-use/tree/master/mobile#readme",
-    "type": "module",
-    "main": "src/index.ts",
-    "bin": {
-        "effing-use-mobile": "src/index.ts"
-    },
-    "files": [
-        "src",
-        "skills",
-        "README.md",
-        "CHANGELOG.md",
-        "LICENSE"
-    ],
-    "publishConfig": {
-        "access": "public",
-        "provenance": true
-    },
-    "scripts": {
-        "start": "bun src/index.ts",
-        "dev": "bun --watch src/index.ts",
-        "check": "bunx tsc --noEmit",
-        "test": "bun test",
-        "test:live": "MOBILE_LIVE_TEST=1 bun test tests/runtime-live.test.ts",
-        "size": "bun ../bench/mcp-size.ts bun src/index.ts"
-    },
-    "keywords": [
-        "mcp",
-        "model-context-protocol",
-        "capacitor",
-        "android",
-        "webview",
-        "adb",
-        "mobile-automation",
-        "tmcp"
-    ],
-    "dependencies": {
-        "@tmcp/adapter-valibot": "^0.1.6",
-        "@tmcp/transport-stdio": "^0.5.0",
-        "tmcp": "^1.20.0",
-        "valibot": "^1.4.2"
-    },
-    "devDependencies": {
-        "@types/bun": "latest",
-        "typescript": "latest"
-    }
+  "name": "effing-use-mobile",
+  "version": "0.1.0",
+  "description": "Token-efficient Android/Capacitor control: 3 MCP tools (act, observe, extract) over adb + the WebView devtools protocol — no Appium, no drivers",
+  "license": "MIT",
+  "author": "Michael Obubelebra Amachree",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Michael-Obele/effing-use.git",
+    "directory": "mobile"
+  },
+  "homepage": "https://github.com/Michael-Obele/effing-use/tree/master/mobile#readme",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "effing-use-mobile": "src/index.ts",
+    "effing-use-mobile-http": "src/http.ts"
+  },
+  "files": [
+    "src",
+    "skills",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "start:http": "bun src/http.ts",
+    "dev": "bun --watch src/index.ts",
+    "dev:http": "bun --watch src/http.ts",
+    "check": "bunx tsc --noEmit",
+    "test": "bun test",
+    "test:live": "MOBILE_LIVE_TEST=1 bun test tests/runtime-live.test.ts",
+    "size": "bun ../bench/mcp-size.ts bun src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "capacitor",
+    "android",
+    "webview",
+    "adb",
+    "mobile-automation",
+    "tmcp"
+  ],
+  "dependencies": {
+    "@tmcp/adapter-valibot": "^0.1.6",
+    "@tmcp/transport-http": "^0.9.1",
+    "@tmcp/transport-stdio": "^0.5.0",
+    "tmcp": "^1.20.0",
+    "valibot": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
 }

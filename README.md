@@ -24,9 +24,11 @@ cd browser && bun install
 bunx playwright install chromium --only-shell
 bun run start:http                                       # :3123/mcp
 
-# Mobile — Docker, from the repo root
+# Mobile — Docker daemon on :3130/mcp, from the repo root
 adb kill-server && adb -a -P 5037 start-server           # host adb, all interfaces
-docker compose -f mobile/compose.yaml build
+MOBILE_PACKAGE=com.your.app docker compose -f mobile/compose.yaml up -d --build mobile-http
+
+# Mobile — Docker stdio (container per client session)
 MOBILE_PACKAGE=com.your.app docker compose -f mobile/compose.yaml run --rm -i mobile
 
 # Mobile — from source, in your Capacitor project
