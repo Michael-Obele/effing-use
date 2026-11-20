@@ -33,7 +33,7 @@
     "dev": "bun --watch src/index.ts",
     "dev:http": "bun --watch src/http.ts",
     "check": "bunx tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test ./tests/"
   },
   "keywords": [
     "mcp",
