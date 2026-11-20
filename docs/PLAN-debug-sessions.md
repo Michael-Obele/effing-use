@@ -618,14 +618,14 @@ has no open Critical/Important findings.
 
 ### Recorded evidence (2026-11-19)
 
-| Check                              | Command                                                  | Result                                          |
-| ---------------------------------- | -------------------------------------------------------- | ----------------------------------------------- |
-| Typecheck                          | `bun run check`                                          | pass (no output)                                |
-| Full suite                         | `bun test`                                               | **64 pass / 3 skip / 0 fail** (67 tests, 6 files) |
-| Live journal (real Chromium)       | `EFFING_LIVE_TEST=1 bun test tests/journal-live.test.ts` | **2 pass / 0 fail**                             |
-| Formatting                         | `bunx prettier --check src/ tests/ bench/ compose.yaml`  | clean (`http.ts` drift fixed in this change)    |
-| `tools/list` size                  | README stdio pipe                                        | **10,620 B / 3 tools** (unchanged from Task 3)  |
-| Call journaling (success + fail)   | `tests/call-journal.test.ts`                             | 3 pass — `type:"call"` record with tool/key/ok/durationMs |
+| Check                            | Command                                                  | Result                                                    |
+| -------------------------------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| Typecheck                        | `bun run check`                                          | pass (no output)                                          |
+| Full suite                       | `bun test`                                               | **64 pass / 3 skip / 0 fail** (67 tests, 6 files)         |
+| Live journal (real Chromium)     | `EFFING_LIVE_TEST=1 bun test tests/journal-live.test.ts` | **2 pass / 0 fail**                                       |
+| Formatting                       | `bunx prettier --check src/ tests/ bench/ compose.yaml`  | clean (`http.ts` drift fixed in this change)              |
+| `tools/list` size                | README stdio pipe                                        | **10,620 B / 3 tools** (unchanged from Task 3)            |
+| Call journaling (success + fail) | `tests/call-journal.test.ts`                             | 3 pass — `type:"call"` record with tool/key/ok/durationMs |
 
 Task 4 verification: a failing `browser_act action=batch steps=[]` and a failing
 `browser_extract kind=query` (missing selector) each append exactly one
