@@ -6,9 +6,10 @@
   "author": "Michael Obubelebra Amachree",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Michael-Obele/effing-use.git"
+    "url": "git+https://github.com/Michael-Obele/effing-use.git",
+    "directory": "browser"
   },
-  "homepage": "https://github.com/Michael-Obele/effing-use#readme",
+  "homepage": "https://github.com/Michael-Obele/effing-use/tree/master/browser#readme",
   "type": "module",
   "main": "src/index.ts",
   "bin": {
