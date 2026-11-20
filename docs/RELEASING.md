@@ -3,6 +3,19 @@
 Publishing is automated via GitHub Actions + npm **Trusted Publishing** (OIDC)
 with **provenance** (sigstore) attestations — no long-lived npm tokens anywhere.
 
+## Two packages, two tag namespaces
+
+The repo holds two published packages. The tag prefix picks which one ships:
+
+| Package                | Folder                    | Tag             | Workflows                                 |
+| ---------------------- | ------------------------- | --------------- | ----------------------------------------- |
+| `effing-use` (browser) | [`browser/`](../browser/) | `v0.4.0`        | `publish.yml`, `docker.yml`               |
+| `effing-use-mobile`    | [`mobile/`](../mobile/)   | `mobile-v0.1.0` | `publish-mobile.yml`, `docker-mobile.yml` |
+
+A `v*` tag publishes nothing from `mobile/`, and a `mobile-v*` tag publishes
+nothing from `browser/`. Each workflow checks its own folder's `package.json`
+against the tag and refuses to publish on a mismatch.
+
 ## One-time setup: npm Trusted Publisher
 
 1. Go to the package settings: `https://www.npmjs.com/package/effing-use/access`
@@ -21,9 +34,11 @@ with **provenance** (sigstore) attestations — no long-lived npm tokens anywher
 
 ## Release checklist — what to update on every new version
 
-1. Bump `version` in `package.json` (semver).
-2. Update the hardcoded `v0.x.y` install link in `README.md` (~line 11).
-3. (Optional) add a `CHANGELOG.md` entry.
+Browser package (`browser/`):
+
+1. Bump `version` in `browser/package.json` (semver).
+2. Update the hardcoded `v0.x.y` install link in `browser/README.md` (~line 11).
+3. (Optional) add a `browser/CHANGELOG.md` entry.
 4. If you bumped the `playwright` dependency, users must re-run
    `bunx playwright install chromium --only-shell` (each Playwright version pins
    its own browser build).
@@ -37,11 +52,14 @@ with **provenance** (sigstore) attestations — no long-lived npm tokens anywher
 10. If `.vscode/mcp.json` (or the global `mcp.json`) pins `effing-use@<version>`,
     bump the pin to the new version.
 
+Mobile package (`mobile/`) — same steps with `mobile/package.json`,
+`mobile/CHANGELOG.md` and a `mobile-vX.Y.Z` tag.
+
 ## Manual trigger
 
-The workflow also accepts `workflow_dispatch` — it publishes whatever version is
-in `package.json` (no tag needed). On tag pushes it refuses to publish if the
-tag doesn't match `package.json`'s version.
+The workflows also accept `workflow_dispatch` — they publish whatever version
+is in their folder's `package.json` (no tag needed). On tag pushes they refuse
+to publish if the tag doesn't match that version.
 
 ## How it works
 
@@ -57,7 +75,7 @@ tag doesn't match `package.json`'s version.
 ## Docker images
 
 `.github/workflows/docker.yml` runs on the same `v*` tags (plus `master`/PR
-build-only runs and `workflow_dispatch`):
+build-only runs and `workflow_dispatch`), building from `browser/`:
 
 - **Tag / dispatch** → multi-arch (`linux/amd64` + `linux/arm64`) push to
   `ghcr.io/michael-obele/effing-use` **and** `docker.io/<user>/effing-use`,
@@ -81,7 +99,7 @@ per-repo, so they must be re-added here once.
 
 - Without the secrets: pushes **GHCR only** (logs a notice).
 - First Docker Hub push: **creates the repository** and sets the short
-  description and full description (this repo's README) via the Hub API; every
+  description and full description (`browser/README.md`) via the Hub API; every
   later push re-syncs both. Topics were removed from the Hub API v2 — set them
   once in the Hub UI (repo page → Topics) if wanted.
 - Every push: syncs description/README; best-effort flips the GHCR package to
