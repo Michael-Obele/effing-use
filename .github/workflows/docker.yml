@@ -39,9 +39,9 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node -p "require('./package.json').version")"
+          PKG="$(node -p "require('./browser/package.json').version")"
           if [ "$TAG" != "$PKG" ]; then
-            echo "::error::tag v${TAG} does not match package.json version ${PKG}"
+            echo "::error::tag v${TAG} does not match browser/package.json version ${PKG}"
             exit 1
           fi
 
@@ -108,7 +108,9 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          # The browser package is self-contained in browser/ (mobile/ has its
+          # own image + workflow).
+          context: ./browser
           platforms: ${{ steps.decide.outputs.platforms }}
           push: ${{ steps.decide.outputs.push == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -143,14 +145,14 @@ jobs:
           echo "repo GET -> $CODE"
           if [ "$CODE" = "404" ]; then
             jq -n --arg ns "$DOCKERHUB_USERNAME" --arg n "$IMAGE_NAME" \
-                  --arg d "$GH_SHORT" --rawfile rd README.md \
+                  --arg d "$GH_SHORT" --rawfile rd browser/README.md \
                   '{namespace:$ns,name:$n,description:$d,full_description:$rd,is_private:false}' \
             | curl -sf "${AUTH[@]}" -X POST \
                 "https://hub.docker.com/v2/namespaces/${DOCKERHUB_USERNAME}/repositories" \
                 -d @- >/dev/null
             echo "Created docker.io/${DOCKERHUB_USERNAME}/${IMAGE_NAME} with README as full description"
           else
-            jq -n --arg d "$GH_SHORT" --rawfile rd README.md \
+            jq -n --arg d "$GH_SHORT" --rawfile rd browser/README.md \
                   '{description:$d,full_description:$rd}' \
             | curl -s "${AUTH[@]}" -X PATCH \
                 "https://hub.docker.com/v2/repositories/${DOCKERHUB_USERNAME}/${IMAGE_NAME}/" \

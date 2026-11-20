@@ -13,6 +13,11 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The browser package lives in browser/ (mobile/ has its own workflow and
+    # its own mobile-v* tag namespace). Every run step below is relative to it.
+    defaults:
+      run:
+        working-directory: browser
     steps:
       - uses: actions/checkout@v6
 
