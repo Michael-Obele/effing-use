@@ -1,5 +1,6 @@
 node_modules/
 .browser-use/
+.effing-mobile/
 *.png
 *.pdf
 *.yml
@@ -11,3 +12,6 @@ build/
 # plan folder (local planning docs, not committed)
 **/plan/
 .playwright-mcp/
+
+# effing-use-mobile compose output
+mobile/out/

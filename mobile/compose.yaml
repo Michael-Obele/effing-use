@@ -1,0 +1,48 @@
+# effing-use-mobile, in Docker.
+#
+# The container does not have a USB bus, so it talks to the adb server running
+# on the host. Two host prerequisites, both one-time:
+#
+#   1. adb must listen on all interfaces, not just loopback:
+#        adb kill-server && adb -a -P 5037 start-server
+#      Without -a the container gets "connection refused"; with it, forwarded
+#      devtools ports (also created by that server) are reachable too.
+#
+#   2. host.docker.internal must resolve inside the container — Docker Desktop
+#      does this already; on native Linux it needs the extra_hosts line below
+#      (already present).
+#
+# Usage:
+#   docker compose -f mobile/compose.yaml build
+#   docker compose -f mobile/compose.yaml run --rm -i mobile
+#   # or point an MCP client at it (see mobile/README.md)
+
+services:
+  mobile:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: effing-use-mobile:local
+    # MCP stdio: the client keeps stdin open, so no TTY and no restart policy.
+    stdin_open: true
+    tty: false
+    init: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # adb client -> host adb server over TCP.
+      ADB_SERVER_SOCKET: tcp:host.docker.internal:5037
+      # Forwards created by that server listen on the *host*, so CDP dials the
+      # host too rather than the container's loopback.
+      MOBILE_CDP_HOST: host.docker.internal
+      # Set these to skip detection: the appId from capacitor.config works only
+      # when the project is mounted, which it usually is not.
+      MOBILE_PACKAGE: ${MOBILE_PACKAGE:-}
+      MOBILE_DEVICE: ${MOBILE_DEVICE:-}
+      MOBILE_ALLOW_EVAL: ${MOBILE_ALLOW_EVAL:-0}
+    # The Capacitor project, so capacitor.config.* is found and `appId` becomes
+    # the package name. Point PROJECT at your app if it is not a sibling.
+    volumes:
+      - ${PROJECT:-..}:/project:ro
+      - ./out:/data
+    working_dir: /project

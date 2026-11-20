@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+tests
+*.png
+*.pdf
+.env
+Dockerfile
+.dockerignore
+debug-log*.txt

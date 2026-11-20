@@ -4,6 +4,12 @@
 **Question:** can we do for mobile apps (Capacitor, specifically) what `effing-use` does
 for browsers — 3 tools, token-cheap, fast — and beat what is already on the market?
 
+> **Update 2026-11-20:** built as **its own package** in [`mobile/`](../mobile/README.md)
+> (npm `effing-use-mobile`, own container image, `mobile-v*` release tags). §14 was
+> answered "all recommended" except 14.2 (Bun, not Node — this repo's `.js`
+> specifiers do not resolve under Node without a build step). What shipped, what is
+> verified and what still needs a device: [`MOBILE.md`](MOBILE.md).
+
 **Short answer:** yes, and the gap is narrower and more specific than "mobile testing is
 hard". Every leading mobile MCP drives the _device_ through the accessibility tree or
 screenshots. None of them drives the _WebView_. For a Capacitor app that is the wrong end
@@ -38,9 +44,9 @@ Three kinds of evidence, kept separate:
 
 **Measured here (2026-11-19, this machine).** Handshake bytes, by speaking JSON-RPC over
 stdio to the real published packages. Reproduce with
-`bun bench/mcp-size.ts <command>`. The draft mobile schema is
-[`bench/mobile-schema-draft.ts`](../bench/mobile-schema-draft.ts); it exists only to weigh
-the proposed tool surface before building the server.
+`bun bench/mcp-size.ts <command>`. The proposed 3-tool schema was later measured as
+the real package (`bun bench/mcp-size.ts bun mobile/src/index.ts`), which replaced
+the throwaway draft.
 
 **Read from primary sources.** Capacitor source and docs, Playwright's Android backend
 source, the WebKit inspector protocol directory, Google's iwdp docs, Apple's `simctl`
@@ -480,12 +486,11 @@ recipe page is a practitioner write-up used for flags that `man simctl` also doc
 Measured locally:
 
 - `bench/mcp-size.ts` — MCP handshake weigher.
-- `bench/mobile-schema-draft.ts` — the proposed 3-tool schema measured above.
 
 Reproduce:
 
 ```bash
-bun bench/mcp-size.ts bun bench/mobile-schema-draft.ts
+bun bench/mcp-size.ts bun mobile/src/index.ts
 bun bench/mcp-size.ts bun src/index.ts
 bun bench/mcp-size.ts npx --yes @mobilenext/mobile-mcp@1.0.18
 bun bench/mcp-size.ts npx --yes appium-mcp@1.99.3

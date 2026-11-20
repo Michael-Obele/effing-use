@@ -10,7 +10,11 @@
     "effing-use (stdio)": {
       "type": "stdio",
       "command": "bunx",
-      "args": ["--package", "effing-use", "effing-use-stdio"],
+      "args": [
+        "--package",
+        "effing-use",
+        "effing-use-stdio"
+      ],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
@@ -21,11 +25,42 @@
     "effing-use-npm": {
       "type": "stdio",
       "command": "bunx",
-      "args": ["--package", "effing-use", "effing-use-stdio"],
+      "args": [
+        "--package",
+        "effing-use",
+        "effing-use-stdio"
+      ],
       "env": {
         "BROWSER_HEADLESS": "true",
         "OUTPUT_DIR": "${workspaceFolder}/.browser-use"
       }
+    },
+    // effing-use-mobile — its own package in ./mobile, running from Docker.
+    // Requires, once per host session:
+    //   adb kill-server && adb -a -P 5037 start-server
+    //   docker compose -f mobile/compose.yaml build
+    // Set the app under test (or drop this entry's -e MOBILE_PACKAGE and mount
+    // the Capacitor project so capacitor.config.* supplies appId).
+    "effing-use-mobile (docker)": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--add-host=host.docker.internal:host-gateway",
+        "-e",
+        "ADB_SERVER_SOCKET=tcp:host.docker.internal:5037",
+        "-e",
+        "MOBILE_CDP_HOST=host.docker.internal",
+        "-e",
+        "MOBILE_PACKAGE=com.your.app",
+        "-e",
+        "MOBILE_OUTPUT_DIR=/data",
+        "-v",
+        "${workspaceFolder}/.effing-mobile:/data",
+        "effing-use-mobile:local"
+      ]
     }
   }
 }
