@@ -188,13 +188,16 @@ EFFING_USE_URL=http://localhost:3123/mcp effing-use observe --kind snapshot
 
 From npm without global install: `bunx --package effing-use effing-use observe --kind snapshot`.
 
-### Published images (GHCR + Docker Hub)
+### Published images (GHCR + Docker Hub) — planned, not yet available
 
-Every `v*` tag publishes multi-arch images (`linux/amd64`, `linux/arm64`) to both registries:
+Once the first `v*` tag is released, multi-arch images (`linux/amd64`,
+`linux/arm64`) will publish to both registries. **Neither registry has the image
+yet**, so these pulls fail today — build locally with `docker compose up --build`
+instead.
 
 ```bash
-docker pull obele9630/effing-use:latest                # Docker Hub
-docker pull ghcr.io/michael-obele/effing-use:latest    # GHCR
+docker pull obele9630/effing-use:latest                # Docker Hub (not yet published)
+docker pull ghcr.io/michael-obele/effing-use:latest    # GHCR (not yet published)
 
 # Chromium needs --init (zombie reaping) and --ipc=host (/dev/shm)
 docker run --rm --init --ipc=host -p 3123:3123 obele9630/effing-use:latest

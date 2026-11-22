@@ -92,7 +92,7 @@ MCP client entries — daemon first, then the per-session fallback:
         "MOBILE_PACKAGE=com.your.app",
         "-v",
         "${workspaceFolder}/.effing-mobile:/data",
-        "ghcr.io/michael-obele/effing-use-mobile:latest"
+        "effing-use-mobile:local"
       ]
     }
   }
