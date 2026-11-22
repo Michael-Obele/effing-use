@@ -10,7 +10,13 @@ This is the browser package, `browser/` in the [effing-use repo](https://github.
 
 ## Install (Bun-only)
 
-Requires [Bun](https://bun.sh) 1.4+. Installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.4.0](https://www.npmjs.com/package/effing-use)):
+> [!IMPORTANT]
+> **Not yet published.** `effing-use` is not on npm (nor on a container
+> registry) yet, so the `bunx` / `bun install -g` commands below will fail until
+> a later release publishes it. Run from source instead — see
+> [**npm vs source**](#npm-vs-source) just below.
+
+Requires [Bun](https://bun.sh) 1.4+. Once published, it installs from npm in seconds — the tarball is ~16 kB ([`effing-use` v0.4.0](https://www.npmjs.com/package/effing-use)):
 
 ```bash
 # No install needed — bunx fetches from npm on first run
@@ -51,6 +57,34 @@ Re-run `bunx playwright install chromium --only-shell` whenever you bump the `pl
 | **source** (`bun src/*.ts`)           | `bun src/cli.ts`, `bun src/http.ts`, `bun src/index.ts` | Local dev / unreleased changes                                                 |
 
 Both expose the same 3 bins: `effing-use` = CLI (HTTP client), `effing-use-stdio` = MCP stdio, `effing-use-http` = MCP http. Don't mix them — `effing-use` alone is **not** an MCP server (it prints CLI help and exits, causing `Failed to parse message` / `MCP server has stopped`).
+
+## Agent skill
+
+`skills/effing-use/SKILL.md` is the half of this package that is not code. It
+carries the loop (snapshot → act → delta), what a stale ref means, and how to
+read a failure, so a session does not re-derive the tool surface from JSON
+Schema every time.
+
+```bash
+# into this project (.agents/skills/, plus .claude/skills/ for Claude Code)
+npx skills add Michael-Obele/effing-use --skill effing-use
+
+# every project instead
+npx skills add Michael-Obele/effing-use --skill effing-use -g
+
+# already have the package installed (repo or tarball)? read it from there
+npx skills add ./node_modules/effing-use/skills/effing-use
+```
+
+That is Vercel's [skills CLI](https://github.com/vercel-labs/skills); `bunx
+skills` works the same. To skip the CLI, copy `skills/effing-use/` into
+`.agents/skills/` (Copilot, Codex, Cursor, Gemini CLI, OpenCode),
+`~/.copilot/skills/` for a global install, or `.claude/skills/`.
+`references/setup.md` and `references/troubleshooting.md` are read only when the
+skill links to them, so the skill itself stays small.
+
+A skill with no MCP entry installed can describe the tools but cannot call one —
+set up the server above first, then the skill.
 
 ## Run it in 60 seconds (recommended path)
 
@@ -420,7 +454,7 @@ Artifacts: `recordings/*.json` (raw steps), `macros/*.ts` (Playwright `run(page)
 
 Env defaults in [`.env.example`](.env.example): `BROWSER_HEADLESS`, `BROWSER_VIEWPORT_W/H`, `BROWSER_TIMEOUT_MS`, `OUTPUT_DIR` (`.browser-use/`, gitignored), `OUTPUT_MAX_CHARS`, `ALLOW_EVAL`, `DELTA_DEFAULT`, `EFFECT_MAX_CHARS`, `STATE_MAX_LINES`, `RECORD_REDACT`, `JOURNAL` (default on), `JOURNAL_MAX_BYTES` (default 2,000,000), `EFFING_USE_URL`.
 
-Agent skill: `skills/effing-use/SKILL.md` (skills.sh-ready).
+Agent skill: `skills/effing-use/SKILL.md` — [install](#agent-skill).
 
 ## Verify
 

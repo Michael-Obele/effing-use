@@ -13,6 +13,13 @@ Each folder is a complete package: its own `package.json`, lockfile, tests,
 `Dockerfile`, `compose.yaml`, README and CHANGELOG. Nothing at the repo root is
 needed to build or run either one.
 
+> [!IMPORTANT]
+> **Not yet published.** Neither package is on npm or a container registry yet.
+> `bunx --package effing-use …`, `bun install -g effing-use` and `docker pull`
+> will fail until that is done — publishing both is planned for a later
+> release. Until then, build and run from source (the Quick start below does
+> this) or build the image locally with `docker compose … up --build`.
+
 ## Quick start
 
 ```bash
@@ -38,6 +45,38 @@ bunx --package effing-use-mobile effing-use-mobile
 Both speak MCP over stdio; the browser package also serves Streamable HTTP at
 `http://localhost:3123/mcp` so several editors can share one Chromium. See
 [`browser/README.md`](browser/README.md) and [`mobile/README.md`](mobile/README.md).
+
+## Agent skills (optional)
+
+Each package ships a `SKILL.md` — the loop, the ref rules and the failure codes,
+written for the agent instead of for you. One command installs both with
+[skills](https://github.com/vercel-labs/skills) (Node 22+, or `bunx skills`):
+
+```bash
+npx skills add Michael-Obele/effing-use --skill effing-use --skill effing-use-mobile
+```
+
+It writes `.agents/skills/` (read by Copilot, Codex, Cursor, Gemini CLI and
+OpenCode) and symlinks `.claude/skills/` for Claude Code. Add `-g` for every
+project instead of just this one. Or take one at a time:
+
+```bash
+npx skills add Michael-Obele/effing-use --skill effing-use          # browser
+npx skills add Michael-Obele/effing-use --skill effing-use-mobile   # mobile
+npx skills add Michael-Obele/effing-use --list                      # preview only
+```
+
+Both skills ship inside the npm tarballs, so a local install needs no network:
+
+```bash
+npx skills add ./node_modules/effing-use/skills/effing-use
+npx skills add ./node_modules/effing-use-mobile/skills/effing-use-mobile
+```
+
+Or copy the folder by hand into `.agents/skills/` (project),
+`~/.copilot/skills/` or `.claude/skills/`. The skill is documentation, not the
+server — the MCP entry still has to exist before an agent can call anything.
+Install the skill so it knows the loop; install the server so it can run it.
 
 ## Layout
 

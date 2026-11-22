@@ -79,13 +79,17 @@ async function snapshot(
     const d = computeDelta(s.baseline, full);
     if (d.unchanged) {
       // The whole point of the product: a re-observation after a no-op costs
-      // about 20 tokens instead of a full tree.
+      // about 20 tokens instead of a full tree. It still has to say WHERE it is
+      // unchanged — an agent that sees `unchanged: true` and no url cannot tell
+      // a quiet page from a silent navigation.
       return {
         ok: true,
         kind: "snapshot",
         mode: "delta",
         unchanged: true,
         count: snap.count,
+        url: snap.url,
+        title: snap.title,
       };
     }
     body = d.delta;
@@ -157,7 +161,38 @@ async function runObserve(
         requireCdp(s),
         "state",
       ).catch(() => null);
-      return { ...base, ...(app ?? {}) };
+      // Which window actually has focus, per the Android window manager.
+      // The WebView is only one layer: an ANR dialog, a permission prompt, a
+      // system update sheet or a keyboard-heavy overlay sits in front of it and
+      // is invisible to CDP. Without this line the agent sees a healthy DOM and
+      // a tap that "succeeded" with no visible change, and blames the app.
+      const focus = await shell(
+        s.device.serial,
+        "dumpsys window | grep mCurrentFocus",
+      ).catch(() => "");
+      const focusText = focus.replace(/\s+/g, " ").trim();
+      const window = /mCurrentFocus=Window\{[^}]*?\s(u0\s+)?([^}]+)\}/.exec(
+        focusText,
+      )?.[2];
+      return {
+        ...base,
+        ...(app ?? {}),
+        ...(window
+          ? {
+              focusedWindow: window,
+              // Only a claim about occlusion, not about correctness: the
+              // package name appears in the window title when the app owns
+              // focus.
+              appHasFocus: window.includes(s.pkg),
+              ...(window.includes(s.pkg)
+                ? {}
+                : {
+                    nativeOverlay:
+                      "A native window has focus, not the app. WebView taps can still dispatch, but the user is looking at that window — use observe kind=screenshot to see it.",
+                  }),
+            }
+          : {}),
+      };
     }
 
     case "snapshot":

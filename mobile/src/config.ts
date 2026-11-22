@@ -54,6 +54,15 @@ export type MobileConfig = {
    * after a tap can still show the old DOM and report `unchanged`.
    */
   settleMs: number;
+  /**
+   * Upper bound for waiting on DOM quiescence after an input. A fixed delay
+   * cannot cover animated overlays: a bits-ui command palette in a real
+   * Capacitor app mounted ~150-370 ms after the tap, so a 120 ms settle reported
+   * `unchanged` for an action that had worked.
+   */
+  settleMaxMs: number;
+  /** How often the page signature is sampled while waiting for quiescence. */
+  settlePollMs: number;
   allowEval: boolean;
   journal: boolean;
   journalMaxBytes: number;
@@ -82,6 +91,8 @@ export function loadMobileConfig(): MobileConfig {
     domCapChars: num(process.env.MOBILE_DOM_CAP_CHARS, 20_000),
     snapshotMax: num(process.env.MOBILE_SNAPSHOT_MAX, 150),
     settleMs: num(process.env.MOBILE_SETTLE_MS, 120),
+    settleMaxMs: num(process.env.MOBILE_SETTLE_MAX_MS, 600),
+    settlePollMs: num(process.env.MOBILE_SETTLE_POLL_MS, 50),
     // eval can mutate the app and reach native plugins; off unless asked.
     allowEval: flag(process.env.MOBILE_ALLOW_EVAL, false),
     journal: flag(process.env.MOBILE_JOURNAL, true),

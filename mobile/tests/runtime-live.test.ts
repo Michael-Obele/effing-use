@@ -180,4 +180,143 @@ describe("webview runtime (live)", () => {
       }
     },
   );
+
+  test.skipIf(!LIVE || !CHROME)(
+    "scrollProbe finds the scroller and keeps its point inside it",
+    async () => {
+      // A page whose only scrollable region is a narrow horizontal strip, the
+      // shape that broke the first scroll implementation: the gesture must be
+      // dispatched inside that strip, and at max scroll the centred element is
+      // no longer a valid target.
+      const dir = mkdtempSync(join(tmpdir(), "effing-scroll-"));
+      const file = join(dir, "scroll.html");
+      writeFileSync(
+        file,
+        `<!doctype html><html><head><title>Scroll</title>
+<style>
+  body { margin: 0 }
+  #rail { position: absolute; left: 20px; top: 40px; width: 300px; height: 120px;
+          overflow-x: scroll; display: flex; gap: 8px; }
+  #rail > a { flex: 0 0 140px; height: 100px; }
+  #tail { position: absolute; left: 0; right: 0; top: 400px; height: 80px; }
+</style></head>
+<body>
+  <div id="rail">
+    ${Array.from({ length: 12 }, (_, i) => `<a href="#${i}">cell ${i}</a>`).join("\n    ")}
+  </div>
+  <div id="tail"><button id="elsewhere">Elsewhere</button></div>
+</body></html>`,
+      );
+      const { child, port } = await startChrome();
+      try {
+        const wsUrl = await newPage(port, `file://${file}`);
+        const cdp = await Cdp.connect(wsUrl);
+        // Desktop headless Chrome is not a touch device, so a touch gesture
+        // scrolls nothing. Emulate a phone, which is what the product runs on.
+        await cdp.send("Emulation.setTouchEmulationEnabled", {
+          enabled: true,
+          maxTouchPoints: 1,
+        });
+        await cdp.send("Emulation.setDeviceMetricsOverride", {
+          width: 412,
+          height: 843,
+          deviceScaleFactor: 1,
+          mobile: true,
+        });
+        await injectRuntime(cdp);
+
+        type Probe = {
+          point: { x: number; y: number };
+          scroller: string;
+          left: number;
+          maxLeft: number;
+          maxTop: number;
+        };
+        const probe = (target: unknown, axis: string) =>
+          callWithRuntime<Probe>(cdp, "scrollProbe", [target, axis]);
+        const railLeft = async () =>
+          (
+            (await cdp.send("Runtime.evaluate", {
+              expression:
+                "Math.round(document.getElementById('rail').scrollLeft)",
+              returnByValue: true,
+            })) as { result: { value: number } }
+          ).result.value;
+
+        const before = await probe("#rail", "x");
+        expect(before.scroller).toContain("#rail");
+        expect(before.maxLeft).toBeGreaterThan(100);
+        expect(before.left).toBe(0);
+
+        // The point must land inside the strip, not at the viewport centre
+        // (which is over #tail here and would scroll nothing).
+        const rail = (await cdp.send("Runtime.evaluate", {
+          expression: `(() => { const b = document.getElementById('rail').getBoundingClientRect();
+            return JSON.stringify({ top: b.top, bottom: b.bottom, left: b.left, right: b.right }) })()`,
+          returnByValue: true,
+        })) as { result: { value: string } };
+        const r = JSON.parse(rail.result.value) as Record<string, number>;
+        expect(before.point.y).toBeGreaterThan(r.top);
+        expect(before.point.y).toBeLessThan(r.bottom);
+        expect(before.point.x).toBeGreaterThan(r.left);
+        expect(before.point.x).toBeLessThan(r.right);
+
+        // Scroll to the very end, then probe again: the point must STILL be
+        // inside the strip. This is the regression that made "scroll left" fail
+        // at max scroll, because the centred cell had moved past the right edge.
+        //
+        // Same pair `act` uses: touch first, mouse as the fallback. Headless
+        // desktop Chrome ignores touch-source gestures even with touch emulated
+        // (measured: scrollLeft stayed 0), so the mouse path is what runs here;
+        // on a device the touch path is the one that fires.
+        const gesture = (source: "touch" | "mouse") =>
+          cdp.send("Input.synthesizeScrollGesture", {
+            x: before.point.x,
+            y: before.point.y,
+            xDistance: -2000,
+            yDistance: 0,
+            gestureSourceType: source,
+            speed: 4000,
+            preventFling: true,
+          });
+        await gesture("touch");
+        await new Promise((res) => setTimeout(res, 300));
+        let shifted = await railLeft();
+        if (shifted === 0) {
+          await gesture("mouse");
+          await new Promise((res) => setTimeout(res, 300));
+          shifted = await railLeft();
+        }
+        expect(shifted).toBeGreaterThan(100);
+
+        const atEnd = await probe("#rail", "x");
+        expect(atEnd.point.y).toBeGreaterThan(r.top);
+        expect(atEnd.point.y).toBeLessThan(r.bottom);
+        expect(atEnd.point.x).toBeGreaterThan(r.left);
+        expect(atEnd.point.x).toBeLessThan(r.right);
+
+        // And a target outside the strip must report the strip, not the page.
+        const viaRef = await probe(
+          (await callWithRuntime<Snap>(cdp, "snapshot", [{ max: 40 }])).lines
+            .split("\n")
+            .findIndex((l) => l.includes("cell 1")),
+          "x",
+        );
+        expect(viaRef.scroller).toContain("#rail");
+
+        // With no target the probe follows the screen centre, whatever is
+        // there — here #tail, which does not scroll sideways. Honest rather
+        // than clever: the caller asked about the middle of the screen.
+        const centre = await probe(null, "x");
+        expect(centre.scroller).toBe("document");
+        // The document tolerates sub-pixel overflow (measured 1 px here), so
+        // "cannot scroll horizontally" means "essentially zero", not exactly 0.
+        expect(centre.maxLeft).toBeLessThan(2);
+
+        cdp.close();
+      } finally {
+        child.kill("SIGKILL");
+      }
+    },
+  );
 });

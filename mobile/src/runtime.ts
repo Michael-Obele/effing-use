@@ -278,6 +278,127 @@ export const RUNTIME = String.raw`
     return { count: els.length, items: out };
   }
 
+  // A cheap fingerprint of what the user would see, used only to decide that the
+  // DOM has stopped moving after an input. Text length plus control count is
+  // enough to notice an overlay mounting, a list filtering, or a route swap,
+  // and it costs one string compare per poll instead of a full snapshot.
+  function sig() {
+    var body = document.body;
+    var visible = 0;
+    var els = document.querySelectorAll(SEL);
+    for (var i = 0; i < els.length; i++) {
+      if (visibleEl(els[i])) visible++;
+    }
+    return (
+      location.href +
+      "|" +
+      (body ? body.innerText.length : 0) +
+      "|" +
+      els.length +
+      "|" +
+      visible +
+      "|" +
+      document.title
+    );
+  }
+
+  // Containment check without the layout work visible() does for snapshots:
+  // only used by sig(), where parent-chain truth is enough.
+  function visibleEl(el) {
+    if (!el || !el.isConnected) return false;
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+
+  function scrollable(el, axis) {
+    var node = el;
+    while (node && node !== document.body && node !== document.documentElement) {
+      var cs = getComputedStyle(node);
+      var sx = (cs.overflowX === "auto" || cs.overflowX === "scroll") && node.scrollWidth > node.clientWidth + 1;
+      var sy = (cs.overflowY === "auto" || cs.overflowY === "scroll") && node.scrollHeight > node.clientHeight + 1;
+      if ((axis === "x" && sx) || (axis === "y" && sy) || (axis === "both" && (sx || sy))) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function nameOf(el) {
+    if (!el || el === document.documentElement || el === document.body) return "document";
+    return (
+      el.tagName.toLowerCase() +
+      (el.id ? "#" + el.id : "") +
+      (el.className && typeof el.className === "string"
+        ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
+        : "")
+    );
+  }
+
+  /**
+   * Where a scroll would go, and where it already is.
+   *
+   * Resolves a ref, a CSS selector, or the viewport centre to a point, finds the
+   * nearest scrollable ancestor for the requested axis, and reports the scroll
+   * position plus the maximum. The host dispatches the gesture and calls this
+   * again to prove something moved: a scroll that silently does nothing is the
+   * same lie as a tap that reports ok and changes nothing.
+   */
+  function scrollProbe(target, axis) {
+    axis = axis === "x" ? "x" : "y";
+    var el = null;
+    if (typeof target === "number") {
+      var r = ref(target);
+      if (!r) return { stale: true };
+      el = r.host;
+    } else if (typeof target === "string" && target) {
+      try {
+        el = document.querySelector(target);
+      } catch (e) {
+        return { badSelector: String(e && e.message || e) };
+      }
+      if (!el) return { notFound: true };
+    } else {
+      el = document.elementFromPoint(Math.round(innerWidth / 2), Math.round(innerHeight / 2));
+    }
+    if (!el) return { notFound: true };
+
+    var scroller = scrollable(el, axis);
+    var box = el.getBoundingClientRect();
+    var point = { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+    // Keep the point on screen: an element scrolled off-screen has an
+    // off-viewport centre, and a gesture there goes nowhere.
+    point.x = Math.max(1, Math.min(point.x, innerWidth - 2));
+    point.y = Math.max(1, Math.min(point.y, innerHeight - 2));
+    // ...and inside the scroll region itself. At the end of a horizontal
+    // scroller the centred element sits past the right edge, so the clamped
+    // point lands in the page margin and the gesture bubbles past the scroller
+    // (measured: scrollLeft stuck at max while a "successful" scroll was
+    // reported). Intersect with the scroller's own visible box instead.
+    if (scroller) {
+      var sb = scroller.getBoundingClientRect();
+      var left = Math.max(sb.left, 0) + 4;
+      var right = Math.min(sb.right, innerWidth) - 4;
+      var top = Math.max(sb.top, 0) + 4;
+      var bottom = Math.min(sb.bottom, innerHeight) - 4;
+      if (right > left) point.x = Math.round((left + right) / 2);
+      if (bottom > top) point.y = Math.round((top + bottom) / 2);
+    }
+
+    var doc = document.scrollingElement || document.documentElement;
+    var s = scroller || doc;
+    var maxLeft = Math.max(0, s.scrollWidth - s.clientWidth);
+    var maxTop = Math.max(0, s.scrollHeight - s.clientHeight);
+    return {
+      point: point,
+      scroller: scroller ? nameOf(scroller) : "document",
+      isDocument: !scroller,
+      left: Math.round(s.scrollLeft),
+      top: Math.round(s.scrollTop),
+      maxLeft: maxLeft,
+      maxTop: maxTop,
+      viewport: { w: innerWidth, h: innerHeight }
+    };
+  }
+
   function stateOf() {
     var C = W.Capacitor;
     var http = false;
@@ -384,7 +505,9 @@ export const RUNTIME = String.raw`
     query: query,
     state: stateOf,
     plugins: plugins,
-    hook: hook
+    hook: hook,
+    sig: sig,
+    scrollProbe: scrollProbe
   };
   return "ready";
 })()

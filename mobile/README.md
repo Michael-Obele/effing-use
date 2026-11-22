@@ -4,9 +4,15 @@ Three MCP tools that drive an Android Capacitor app through **adb and the
 WebView devtools protocol** — no Appium, no drivers, no WebDriverAgent, no
 screenshots in the normal loop.
 
-Published as its own package: `effing-use-mobile` on npm, and as a container
-image. `tools/list` is **3.9 KB / 3 tools** (~1.1k tokens); `@mobilenext/mobile-mcp`
-is 33.6 KB and `appium-mcp` is 43.3 KB, measured the same way.
+A package of its own, `effing-use-mobile`. `tools/list` is **3.9 KB / 3 tools**
+(~1.1k tokens); `@mobilenext/mobile-mcp` is 33.6 KB and `appium-mcp` is 43.3 KB,
+measured the same way.
+
+> [!IMPORTANT]
+> **Not yet published.** The package is not on npm and the image is not on a
+> container registry yet — `bunx --package effing-use-mobile …` fails until
+> then. Publishing both is planned for a later release. Run from source, or
+> build the image locally (`docker compose -f mobile/compose.yaml up --build`).
 
 | Tool             | Values                                                                                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,6 +99,33 @@ MCP client entries — daemon first, then the per-session fallback:
 }
 ```
 
+### Agent skill
+
+`skills/effing-use-mobile/SKILL.md` is the half of this package that is not
+code: the observe → act → delta loop, what a stale ref means, the scroll
+semantics (`value: "right"` reveals what is to the right), and how to read an
+`E_*` envelope. Without it an agent re-derives the tool surface every session.
+
+```bash
+# into this project (.agents/skills/, plus .claude/skills/ for Claude Code)
+npx skills add Michael-Obele/effing-use --skill effing-use-mobile
+
+# every project instead
+npx skills add Michael-Obele/effing-use --skill effing-use-mobile -g
+
+# already have the package installed (repo or tarball)? read it from there
+npx skills add ./node_modules/effing-use-mobile/skills/effing-use-mobile
+```
+
+That is Vercel's [skills CLI](https://github.com/vercel-labs/skills); `bunx
+skills` works the same. To skip the CLI, copy
+`skills/effing-use-mobile/` into `.agents/skills/` (Copilot, Codex, Cursor,
+Gemini CLI, OpenCode), `~/.copilot/skills/` for a global install, or
+`.claude/skills/`.
+
+A skill with no MCP entry installed can describe the tools but cannot call one —
+set up the server above first, then the skill.
+
 ## The loop
 
 1. `mobile_observe` `kind: "state"` → attaches and reports device, app, platform,
@@ -115,6 +148,13 @@ MCP client entries — daemon first, then the per-session fallback:
   and `aria-hidden` subtrees never become refs.
 - **Covered taps are reported.** A toast over the button returns
   `hit: false, coveredBy: "<tag>"` instead of a silent no-op.
+- **Scrolling is aimed and measured.** `scroll` with `value: "left|right|up|down"`
+  (the direction of the _content_ you want to see) names the scroll region with
+  an optional `target`, walks up to its nearest scrollable ancestor, and reports
+  `moved`, `delta`, `from`, `to`, `max`, `scroller` and `mechanism`. A sideways
+  rail inside a phone-width page is therefore one call, not a guess: on a live
+  app it moved 247 px per call and answered `atEnd: true` at the end instead of
+  pretending to work. `swipe` stays for drag-only carousels.
 - **Input is settled before you look.** Touch and key events reach the page
   asynchronously; without settling, a delta taken right after a tap reads the old
   DOM and says `unchanged: true`.
@@ -135,18 +175,20 @@ MCP client entries — daemon first, then the per-session fallback:
 
 ## Config
 
-| Env                   | Default                           | Meaning                                                        |
-| --------------------- | --------------------------------- | -------------------------------------------------------------- |
-| `MOBILE_DEVICE`       | the only online device            | adb serial                                                     |
-| `MOBILE_PACKAGE`      | `appId` from `capacitor.config.*` | Android package                                                |
-| `MOBILE_CDP_HOST`     | `127.0.0.1`                       | host owning the adb forward (`host.docker.internal` in Docker) |
-| `MOBILE_OUTPUT_DIR`   | `.effing-mobile`                  | journal + artifacts                                            |
-| `MOBILE_SETTLE_MS`    | `120`                             | wait after a dispatched input                                  |
-| `MOBILE_PORT`         | `3130`                            | port for the HTTP entry (`src/http.ts`)                        |
-| `MOBILE_ALLOW_EVAL`   | `0`                               | allow `act action=eval`                                        |
-| `MOBILE_JOURNAL`      | on                                | append-only JSONL evidence                                     |
-| `MOBILE_SNAPSHOT_MAX` | `150`                             | refs per snapshot                                              |
-| `MOBILE_TIMEOUT_MS`   | `20000`                           | adb/CDP timeout                                                |
+| Env                     | Default                           | Meaning                                                        |
+| ----------------------- | --------------------------------- | -------------------------------------------------------------- |
+| `MOBILE_DEVICE`         | the only online device            | adb serial                                                     |
+| `MOBILE_PACKAGE`        | `appId` from `capacitor.config.*` | Android package                                                |
+| `MOBILE_CDP_HOST`       | `127.0.0.1`                       | host owning the adb forward (`host.docker.internal` in Docker) |
+| `MOBILE_OUTPUT_DIR`     | `.effing-mobile`                  | journal + artifacts                                            |
+| `MOBILE_SETTLE_MS`      | `120`                             | minimum wait after a dispatched input                          |
+| `MOBILE_SETTLE_MAX_MS`  | `600`                             | cap on waiting for the DOM to stop changing                    |
+| `MOBILE_SETTLE_POLL_MS` | `50`                              | how often the page signature is sampled while settling         |
+| `MOBILE_PORT`           | `3130`                            | port for the HTTP entry (`src/http.ts`)                        |
+| `MOBILE_ALLOW_EVAL`     | `0`                               | allow `act action=eval`                                        |
+| `MOBILE_JOURNAL`        | on                                | append-only JSONL evidence                                     |
+| `MOBILE_SNAPSHOT_MAX`   | `150`                             | refs per snapshot                                              |
+| `MOBILE_TIMEOUT_MS`     | `20000`                           | adb/CDP timeout                                                |
 
 ## Boundaries
 

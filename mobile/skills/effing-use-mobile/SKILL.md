@@ -54,6 +54,32 @@ A ref whose element was replaced returns `E_STALE` — re-observe, never retry
 blindly. `fill` takes a ref only (`eN`), not a selector: it needs the exact
 control to write into.
 
+## Scrolling
+
+`mobile_act` `action: "scroll"` with `value: "left"|"right"|"up"|"down"`. The
+value names the **content** you want to see: `right` moves you towards whatever
+is to the right, it does not drag the content right.
+
+- Without `target` it scrolls whatever sits at the centre of the screen.
+- With `target` (a ref or CSS selector) it walks up to that element's nearest
+  scrollable ancestor and scrolls **that** — the horizontal table rail, not the
+  page. This is what makes sideways scrolling reliable: a phone-width page
+  usually has several nested scrollers and the centre of the screen is often not
+  the one you mean.
+- The result is measured, not asserted: `moved`, `delta`, `from`, `to`, `max`,
+  `scroller` (a CSS path) and `mechanism` (`touch`, or `mouse` when an overlay
+  absorbs the touch). Everything is in CSS pixels of `scrollLeft`/`scrollTop`.
+- Nothing further to scroll returns `ok: true, moved: false, atEnd: true` plus a
+  `hint` naming what it tried. That is not an error — it is the honest answer
+  that you are already at the end.
+- It clamps the gesture point into the visible part of the scroller, so it keeps
+  working at max scroll, when the element that sat under the cursor has scrolled
+  off. Before that clamp, `left` after `right` silently did nothing.
+
+`swipe` is a raw touch drag and is the right call only for drag-only carousels
+and sliders, which ignore scroll gestures. Prefer `scroll`: it verifies it
+actually moved, `swipe` cannot.
+
 ## What makes this different from a device driver
 
 - **Shadow DOM is pierced.** Ionic/Stencil/Shoelace components keep the real
@@ -69,9 +95,15 @@ control to write into.
 - **Covered taps are reported.** If a toast or overlay sits over the target, the
   tap result carries `hit: false` and `coveredBy`. Never read `ok: true` on a tap
   as "the app reacted"; the following delta is the proof.
-- **Input settles before you look.** Touch and key events are dispatched
-  asynchronously, so the server waits two animation frames plus `MOBILE_SETTLE_MS`
-  before returning. That is why a delta right after `tap` is trustworthy.
+- **Input settles before you look.** After an input the server waits two
+  animation frames, then polls a cheap page signature until it stops changing
+  (`MOBILE_SETTLE_MAX_MS`, default 600 ms). An animated overlay that mounts
+  300 ms after the tap is therefore visible in the next delta instead of being
+  reported as `unchanged`.
+- **Native windows are reported.** `kind: "state"` includes `focusedWindow`,
+  `appHasFocus` and — when something else owns the screen, such as an ANR or
+  permission dialog — `nativeOverlay`. Those sit in front of the WebView and are
+  invisible to CDP, so taps can dispatch while you are looking at nothing.
 - **`CapacitorHttp` is called out.** With it enabled, `fetch`/XHR run natively
   and CDP sees nothing; `kind: "network"` says so instead of reporting "no
   requests".
@@ -94,6 +126,7 @@ build, or app not running), `E_STALE`, `E_NOT_FOUND`, `E_CDP`, `E_CDP_CLOSED`,
 | `MOBILE_CDP_HOST`     | `127.0.0.1`                       | host owning the adb forward; `host.docker.internal` |
 | `MOBILE_OUTPUT_DIR`   | `.effing-mobile`                  | journal + artifacts                                 |
 | `MOBILE_SETTLE_MS`    | `120`                             | wait after a dispatched input                       |
+| `MOBILE_SETTLE_MAX_MS`| `600`                             | poll cap until the page stops changing              |
 | `MOBILE_ALLOW_EVAL`   | `0`                               | allow `act action=eval`                             |
 | `MOBILE_JOURNAL`      | on                                | append-only JSONL evidence                          |
 | `MOBILE_SNAPSHOT_MAX` | 150                               | refs per snapshot                                   |

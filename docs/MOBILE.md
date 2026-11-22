@@ -1,6 +1,6 @@
 # effing-use-mobile — what shipped
 
-**Date:** 2026-11-20 · **Status:** built, unit-, DOM- and device-verified, both
+**Date:** 2026-11-21 · **Status:** built, unit-, DOM-, device- and real-Capacitor-app-verified (§4, §5). Plugin-call recording and CapacitorHttp still untested (§6).
 natively and through Docker (§4). Not verified against a real Capacitor app (§5).
 
 The mobile half of `effing-use`: three MCP tools that treat a Capacitor app's
@@ -68,10 +68,12 @@ graph LR
   rather than clicking a stranger. `box()` also hit-tests the centre point, so a
   covering overlay is reported (`hit: false`, `coveredBy`) instead of silently
   eating the tap.
-- **Touch, not mouse**: `Input.dispatchTouchEvent` for tap/swipe/scroll, because
-  mobile UIs bind touch handlers. `back` goes through `adb shell input keyevent 4`
-  because Back belongs to the activity, not the WebView. Every dispatched input is
-  followed by a settle (two animation frames + `MOBILE_SETTLE_MS`).
+- **Touch, not mouse**: `Input.dispatchTouchEvent` for tap/swipe, because mobile
+  UIs bind touch handlers; `scroll` uses `Input.synthesizeScrollGesture`, the
+  only dispatch that actually moves a scroller (see §5). `back` goes through
+  `adb shell input keyevent 4` because Back belongs to the activity, not the
+  WebView. Every dispatched input is followed by a settle (two animation frames
+  - `MOBILE_SETTLE_MS`).
 - **Rings + journal**: console/network live in memory for speed and are appended
   to the same JSONL format the browser server uses; `errors` and `timeline` read
   the journal, so evidence survives a detach.
@@ -181,13 +183,85 @@ emulator images), then run the server with
 `adb -a -P 5037 start-server` on the host and
 `MOBILE_CDP_HOST=host.docker.internal` in the container.
 
-## 5. Not verified yet
+## 5. A real Capacitor app, on a live dev server
 
-- **A real Capacitor app.** The Capacitor-specific paths — the
-  `Capacitor.toNative` hook, the plugin ring, `CapacitorHttp` detection — are
-  written against the upstream `native-bridge.ts` source and have not run
-  against a live bridge. Everything else (attach, snapshot, tap, delta, console,
-  network, logs, screenshot, permissions) is device-proven.
+`app.lolia.mobile` (SvelteKit + Capacitor, `lolia/`) with `vite dev` on `:5174`
+and `adb reverse tcp:5174 tcp:5174`, which is exactly the loop the project's
+`capacitor.config.ts` documents. Started from the app project so `appId` came
+from `capacitor.config.ts` — no `MOBILE_PACKAGE` at all.
+
+| What                     | Result                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| attach + appId detection | 292–514 ms, `liveReload: "http://localhost:5174"`                                  |
+| `platform`               | `android` — a live Capacitor bridge, not a bare WebView                            |
+| plugins from the bridge  | `SystemBars, Haptics, CapacitorCookies, WebView, CapacitorHttp`                    |
+| snapshot                 | 124 refs in 67 ms (periodic table, every element a labelled link)                  |
+| console                  | `debug: [vite] connecting… / connected.` — the dev server's own logs               |
+| network after `reload`   | 155 requests, including `/src/lib/search/rank.ts` and `/node_modules/.vite/deps/…` |
+| `fill` on the search box | app filtered to `Au Gold matches name` in its own delta                            |
+| screenshot               | 166 KB, the rendered table                                                         |
+
+Three real defects surfaced, all fixed:
+
+1. **A fixed settle window lied.** Tapping Search returned at +218 ms with
+   `ok: true`, the next delta said `unchanged`, and the command palette mounted
+   ~150–370 ms later. A constant delay cannot cover an animated overlay, so the
+   settle now polls a page signature until it stabilises (two identical
+   readings, `MOBILE_SETTLE_MAX_MS` = 600 ms, poll 50 ms). Re-measured after the
+   fix: no-op tap 342 ms total, overlay tap 782 ms, and both report the change.
+2. **`unchanged: true` omitted `url`.** The early return dropped it, so a quiet
+   page and a silent navigation looked identical. Now includes `url` and `title`.
+3. **A native window was invisible.** The emulator's SystemUI wedged and an
+   "isn't responding" dialog took the screen; the DOM still looked perfect and
+   every tap "succeeded" with no visible change. `observe kind=state` now reports
+   `focusedWindow`, `appHasFocus` and `nativeOverlay` from the Android window
+   manager, and the screenshot is what proved the dialog existed.
+
+The hit test also proved its worth unprompted: tapping Search while the palette
+was open returned `hit: false, coveredBy: "input#bits-c13"` instead of pretending
+the tap landed.
+
+### Horizontal scrolling: two defects, then 247 px per call
+
+The same app scrolls two ways — a wide periodic table inside a rail, and the
+document vertically — and neither scrolled at all at first.
+
+1. **`scroll` never scrolled anything.** It was a bare `Input.dispatchTouchEvent`
+   drag, which the renderer drops as a gesture it did not recognise. Measured
+   over raw CDP on `div#bits-c20` (maxScroll 498): bare touch drag → 0, touch
+   drag with a touch `id` → 0, `Input.synthesizeScrollGesture` touch at that
+   point → 0, `dispatchMouseEvent` `mouseWheel` → 0, and
+   `Input.synthesizeScrollGesture` **mouse** → 300. Now the gesture is
+   `synthesizeScrollGesture` (touch first, mouse when an overlay swallows it) and
+   the scroll position is read back afterwards, so a no-op is reported as one.
+2. **At max scroll, "left" silently failed.** The gesture point was the target's
+   centre, which after scrolling sat outside the rail, so the renderer scrolled
+   nothing. The probe now clamps the point into the intersection of the
+   scroller's box and the viewport (±4 px), which keeps it over the rail at both
+   ends.
+
+Re-measured through the Docker daemon, targeting the rail:
+
+| Call                                  | Result                                                                 |
+| ------------------------------------- | ---------------------------------------------------------------------- |
+| `scroll right`                        | `0 → 247` in 1123 ms, `mechanism: "touch"`, `scroller: "div#bits-c20"` |
+| `scroll right` again                  | `247 → 494`, then `atEnd: true` in 8 ms at 498                         |
+| `scroll left`                         | `498 → 251`, `delta: -247`                                             |
+| `scroll right` `target: e11`          | `0 → 247` — a ref resolves to its nearest scroller                     |
+| list `scroll down`                    | `0 → 506 → 1012`, `scroll up` returns `1012 → 506`                     |
+| `scroll down` on a non-scrolling page | `ok: true, moved: false, atEnd: true` + hint                           |
+
+Screenshots before and after `scroll right` show columns 1–8, then 11–18.
+
+## 6. Not verified yet
+
+- **The plugin hook under traffic.** `Capacitor.toNative` reported `hooked:
+true` on the live bridge, but no plugin call was made during the run, so the
+  recorded call ring (plugin, method, redacted args, duration, error) is still
+  untested end to end. Haptics or LocalNotifications would exercise it in one
+  step.
+- **`CapacitorHttp` traffic.** Both test apps have it off (`capacitorHttp:
+false`, and network capture worked), so the caveat path has never fired.
 - **A physical device.** Emulator only so far.
 - **iOS.** Nothing built. `ios_webkit_debug_proxy` is the plan, and WIP has no
   `Input` domain, so tap there becomes synthetic events unless a native input
@@ -196,8 +270,11 @@ emulator images), then run the server with
   `fill` is the primary path and does not need it.
 - **`launch` latency** is ~6 s because it shells out to `monkey`. Fine once per
   session; worth replacing with `am start` once the activity name is known.
+- **Emulator stability.** The AVD's SystemUI wedged mid-session and put an ANR
+  dialog over the app. The tool now reports that (see §5), but the underlying
+  emulator fault is not something the tool can fix.
 
-## 6. Upgrade path
+## 7. Upgrade path
 
 1. **iOS (Phase 2)**: `ios_webkit_debug_proxy` + the same runtime. WIP has no
    `Input` domain, so tap becomes synthetic events unless a native input backend

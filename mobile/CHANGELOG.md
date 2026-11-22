@@ -15,9 +15,14 @@ First release. Android + Capacitor.
 - **Snapshot with refs**: visible interactive elements as `[eN]`, shadow DOM
   pierced, hidden/`aria-hidden` subtrees skipped, `mode=delta` at ~20 tokens
   when nothing changed.
-- **Input**: `Input.dispatchTouchEvent` for tap/swipe/scroll, native-setter
-  `fill` with `composed` events, `Input.insertText` for typing, settle after
-  every dispatched input so the next observation sees the result.
+- **Input**: `Input.dispatchTouchEvent` for tap/swipe, native-setter `fill`
+  with `composed` events, `Input.insertText` for typing, settle after every
+  dispatched input so the next observation sees the result.
+- **`scroll` that verifies itself**: `Input.synthesizeScrollGesture` aimed at the
+  target's nearest scrollable ancestor, point clamped into the visible part of
+  that scroller, and a re-read of `scrollLeft`/`scrollTop` afterwards. Returns
+  `moved`, `delta`, `from`, `to`, `max`, `scroller`, `mechanism`, or
+  `atEnd: true` with a hint when there is nothing further to scroll.
 - **Evidence**: journal-backed `errors`/`timeline`, console and network rings,
   Capacitor plugin trace, `CapacitorHttp` detection, screenshot via
   `adb exec-out screencap`, HAR export.
@@ -30,3 +35,18 @@ First release. Android + Capacitor.
 - **Verified**: Phase 0 loop on an Android emulator (attach 230–560 ms, snapshot
   19–47 ms, tap 64–364 ms, no-op delta 10–20 ms) both natively and through
   Docker.
+- **First real Capacitor app**: `app.lolia.mobile` against a live Vite dev server.
+  Attach with zero configuration (appId read from `capacitor.config.ts`),
+  `platform: android` and 5 real plugins from the live bridge, 124-ref snapshot,
+  155 Vite module requests captured after a reload, `fill` filtering the app's own
+  search to "Au Gold", and screenshot evidence.
+- **Settle is quiescence-based**: a fixed 120 ms window reported `unchanged` for
+  a tap that opened a command palette 150–370 ms later. After an input the server
+  now polls a page signature until it stabilises (`MOBILE_SETTLE_MAX_MS`, default
+  600 ms, `MOBILE_SETTLE_POLL_MS` 50 ms). Measured: no-op tap 342 ms total,
+  overlay-opening tap 782 ms, and both report the truth.
+- **`observe kind=state` reports native focus**: `focusedWindow`, `appHasFocus`
+  and `nativeOverlay`. An Android ANR dialog occupied the screen while the DOM
+  still looked healthy, and every tap "succeeded" with no visible change.
+- **`unchanged: true` deltas now include `url` and `title`**, so a quiet page is
+  distinguishable from a silent navigation.

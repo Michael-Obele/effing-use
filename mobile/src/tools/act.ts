@@ -72,14 +72,18 @@ type Box = {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Wait for a dispatched input to actually land.
+ * Wait for a dispatched input to actually land, then for the DOM to stop moving.
  *
  * `Input.dispatchTouchEvent` resolves when the browser has queued the gesture,
- * not when the page has handled it: a snapshot taken right after a tap can read
- * the pre-tap DOM and answer `unchanged: true`, which reads as "your tap did
- * nothing". Two animation frames cover compositor -> main thread, and the small
- * sleep covers framework state updates that land a tick later (verified: a tap
- * that visibly worked was invisible to a delta 11 ms afterwards).
+ * not when the page has handled it, so a snapshot taken right after a tap can
+ * read the pre-tap DOM and answer `unchanged: true` — which reads as "your tap
+ * did nothing". Two animation frames cover compositor -> main thread.
+ *
+ * A fixed delay is not enough after that: a real Capacitor app's command
+ * palette mounted 150-370 ms after the tap, so a 120 ms settle still reported
+ * `unchanged` for an action that had worked. So poll a cheap page signature
+ * until it stops changing (two identical readings), capped at settleMaxMs. An
+ * idle page costs one extra round trip; a changing one is measured, not guessed.
  */
 async function settle(cdp: Cdp, cfg: MobileConfig): Promise<void> {
   await cdp
@@ -91,6 +95,23 @@ async function settle(cdp: Cdp, cfg: MobileConfig): Promise<void> {
     })
     .catch(() => undefined);
   await sleep(cfg.settleMs);
+
+  const deadline = Date.now() + Math.max(0, cfg.settleMaxMs - cfg.settleMs);
+  let previous: string | null = null;
+  let stable = 0;
+  while (Date.now() < deadline) {
+    const sig = await callWithRuntime<string>(cdp, "sig").catch(() => null);
+    if (sig === null) return;
+    if (sig === previous) {
+      // Two identical readings in a row: the page has finished whatever the
+      // input set off. One is not enough — a mount can land between polls.
+      if (++stable >= 2) return;
+    } else {
+      stable = 0;
+      previous = sig;
+    }
+    await sleep(cfg.settlePollMs);
+  }
 }
 
 // requireCdp is imported as needCdp: every action here needs the attached page.
@@ -414,32 +435,149 @@ async function runAct(
 
     case "scroll": {
       const cdp = needCdp(s);
-      const vp = await viewport(cdp);
       const dir = (args.value ?? "down").toLowerCase();
-      const amount = Math.round(vp.h * 0.6);
-      const cx = Math.round(vp.w / 2);
-      const cy = Math.round(vp.h / 2);
-      const half = amount / 2;
-      const from =
-        dir === "up"
-          ? { x: cx, y: cy - half }
-          : dir === "left"
-            ? { x: cx + half, y: cy }
-            : dir === "right"
-              ? { x: cx - half, y: cy }
-              : { x: cx, y: cy + half };
-      const to =
-        dir === "up"
-          ? { x: cx, y: cy + half }
-          : dir === "left"
-            ? { x: cx - half, y: cy }
-            : dir === "right"
-              ? { x: cx + half, y: cy }
-              : { x: cx, y: cy - half };
-      await gesture(cdp, from, to, 10);
-      await sleep(200);
+      const axis = dir === "left" || dir === "right" ? "x" : "y";
+      // "right" means "show me what is to the right", so the content must move
+      // left: with the compositor's sign convention that is a NEGATIVE
+      // xDistance. Verified against Chrome: xDistance -300 => scrollLeft +300.
+      const sign = dir === "right" || dir === "down" ? -1 : 1;
+      const targetArg = target
+        ? /^e\d+$/.test(target)
+          ? Number(target.slice(1))
+          : target
+        : null;
+
+      type Probe = {
+        stale?: boolean;
+        notFound?: boolean;
+        badSelector?: string;
+        point: { x: number; y: number };
+        scroller: string;
+        isDocument: boolean;
+        left: number;
+        top: number;
+        maxLeft: number;
+        maxTop: number;
+        viewport: { w: number; h: number };
+      };
+
+      let before = await callWithRuntime<Probe>(cdp, "scrollProbe", [
+        targetArg,
+        axis,
+      ]);
+      if (before.stale) {
+        throw new MobileError(
+          "E_STALE",
+          `Ref ${target} is stale.`,
+          "observe kind=snapshot for fresh refs.",
+        );
+      }
+      if (before.notFound) {
+        throw new MobileError(
+          "E_NOT_FOUND",
+          `Nothing matches ${target}.`,
+          "Pass a snapshot ref or a CSS selector, or omit target to scroll the region under the screen centre.",
+        );
+      }
+      if (before.badSelector) {
+        throw new MobileError(
+          "E_BAD_INPUT",
+          `Bad selector ${target}: ${before.badSelector}`,
+          "Fix the selector.",
+        );
+      }
+
+      const viewportSpan = axis === "x" ? before.viewport.w : before.viewport.h;
+      const max = axis === "x" ? before.maxLeft : before.maxTop;
+      const current = axis === "x" ? before.left : before.top;
+      const wanted = Math.round(viewportSpan * 0.6);
+      const remaining = sign < 0 ? max - current : current;
+
+      if (max === 0 || remaining <= 0) {
+        // Not a failure: the region simply has nothing further to show. Saying
+        // so beats a silent ok that an agent reads as "it scrolled".
+        return {
+          ok: true,
+          action: "scroll",
+          direction: dir,
+          axis,
+          scroller: before.scroller,
+          moved: false,
+          atEnd: true,
+          position: { left: before.left, top: before.top },
+          max: { left: before.maxLeft, top: before.maxTop },
+          hint:
+            max === 0
+              ? `Nothing scrolls ${axis === "x" ? "horizontally" : "vertically"} at ${before.scroller}. Try the other axis, or target another element.`
+              : `Already at the ${sign < 0 ? "end" : "start"} of ${before.scroller}.`,
+        };
+      }
+
+      const distance = Math.min(wanted, remaining) * sign;
+
+      /**
+       * Two mechanisms, because neither covers both kinds of scroll container,
+       * and neither is assumed to work: both are verified by re-reading the
+       * scroll position afterwards.
+       *
+       * Measured on a bits-ui horizontal scroller in a Capacitor app: with the
+       * gesture point inside the scroller, touch-source synthesize scrolls it,
+       * while bare touch drags, touch drags carrying a touch id, and
+       * dispatchMouseEvent(mouseWheel) all left scrollLeft at 0. Mouse-source
+       * synthesize is the fallback for when the point lands on an overlay that
+       * swallows touch, which is also why the point is clamped into the
+       * scroller's own visible box.
+       */
+      const gesture = (source: "touch" | "mouse") =>
+        cdp.send("Input.synthesizeScrollGesture", {
+          x: before.point.x,
+          y: before.point.y,
+          xDistance: axis === "x" ? distance : 0,
+          yDistance: axis === "y" ? distance : 0,
+          gestureSourceType: source,
+          speed: 1200,
+          preventFling: true,
+        });
+
+      await gesture("touch").catch(() => undefined);
+      await sleep(120);
+      let after = await callWithRuntime<Probe>(cdp, "scrollProbe", [
+        targetArg,
+        axis,
+      ]);
+      let mechanism = "touch";
+
+      if (after.left === before.left && after.top === before.top) {
+        await gesture("mouse").catch(() => undefined);
+        await sleep(120);
+        after = await callWithRuntime<Probe>(cdp, "scrollProbe", [
+          targetArg,
+          axis,
+        ]);
+        mechanism = "mouse";
+      }
       await settle(cdp, cfg);
-      return { ok: true, action: "scroll", direction: dir, distance: amount };
+
+      const delta =
+        axis === "x" ? after.left - before.left : after.top - before.top;
+      return {
+        ok: true,
+        action: "scroll",
+        direction: dir,
+        axis,
+        scroller: after.scroller,
+        mechanism,
+        moved: delta !== 0,
+        delta,
+        from: axis === "x" ? before.left : before.top,
+        to: axis === "x" ? after.left : after.top,
+        max: { left: after.maxLeft, top: after.maxTop },
+        ...(delta === 0
+          ? {
+              hint: `No scroll happened. ${after.scroller} reports ${axis === "x" ? `scrollLeft ${after.left}/${after.maxLeft}` : `scrollTop ${after.top}/${after.maxTop}`}; the region may be drag-only (try action=swipe) or nothing scrolls at that point.`,
+            }
+          : {}),
+      };
     }
 
     case "back": {
